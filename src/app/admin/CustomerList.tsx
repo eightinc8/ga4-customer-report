@@ -18,6 +18,8 @@ export default function CustomerList({
 }) {
   const [customers, setCustomers] = useState(initialCustomers);
   const [showForm, setShowForm] = useState(false);
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [editData, setEditData] = useState({ companyName: "", loginId: "", ga4PropertyId: "" });
   const [formData, setFormData] = useState({
     loginId: "",
     password: "",
@@ -71,6 +73,54 @@ export default function CustomerList({
     }
   }
 
+  function startEdit(c: Customer) {
+    setEditingId(c.id);
+    setEditData({
+      companyName: c.company_name,
+      loginId: c.login_id.startsWith("customer_") ? "" : c.login_id,
+      ga4PropertyId: c.ga4_property_id || "",
+    });
+  }
+
+  async function handleSaveEdit(id: number) {
+    setLoading(true);
+    setMessage("");
+    try {
+      const res = await fetch(`/api/admin/customers/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          companyName: editData.companyName,
+          loginId: editData.loginId,
+          ga4PropertyId: editData.ga4PropertyId,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setMessage(data.error);
+        return;
+      }
+      setCustomers(
+        customers.map((c) =>
+          c.id === id
+            ? {
+                ...c,
+                company_name: editData.companyName,
+                login_id: editData.loginId || c.login_id,
+                ga4_property_id: editData.ga4PropertyId || null,
+              }
+            : c
+        )
+      );
+      setEditingId(null);
+      setMessage("更新しました");
+    } catch {
+      setMessage("エラーが発生しました");
+    } finally {
+      setLoading(false);
+    }
+  }
+
   return (
     <>
       {message && (
@@ -93,28 +143,86 @@ export default function CustomerList({
           <tbody>
             {customers.map((c) => (
               <tr key={c.id} className="border-t border-gray-100 hover:bg-gray-50">
-                <td className="px-5 py-3 text-gray-800 font-medium">{c.company_name}</td>
-                <td className="px-5 py-3 text-gray-600">{c.login_id}</td>
-                <td className="px-5 py-3 text-gray-600">{c.ga4_property_id || "-"}</td>
-                <td className="px-5 py-3 text-center">
-                  <span
-                    className={`inline-block px-2 py-1 rounded text-xs font-medium ${
-                      c.is_active
-                        ? "bg-green-100 text-green-700"
-                        : "bg-gray-100 text-gray-500"
-                    }`}
-                  >
-                    {c.is_active ? "有効" : "無効"}
-                  </span>
-                </td>
-                <td className="px-5 py-3 text-center">
-                  <button
-                    onClick={() => toggleActive(c.id, c.is_active)}
-                    className="text-xs text-blue-600 hover:text-blue-800"
-                  >
-                    {c.is_active ? "無効化" : "有効化"}
-                  </button>
-                </td>
+                {editingId === c.id ? (
+                  <>
+                    <td className="px-5 py-2">
+                      <input
+                        type="text"
+                        value={editData.companyName}
+                        onChange={(e) => setEditData({ ...editData, companyName: e.target.value })}
+                        className="w-full px-2 py-1 border border-gray-300 rounded text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                    </td>
+                    <td className="px-5 py-2">
+                      <input
+                        type="text"
+                        value={editData.loginId}
+                        onChange={(e) => setEditData({ ...editData, loginId: e.target.value })}
+                        className="w-full px-2 py-1 border border-gray-300 rounded text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        placeholder="任意"
+                      />
+                    </td>
+                    <td className="px-5 py-2">
+                      <input
+                        type="text"
+                        value={editData.ga4PropertyId}
+                        onChange={(e) => setEditData({ ...editData, ga4PropertyId: e.target.value })}
+                        className="w-full px-2 py-1 border border-gray-300 rounded text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                    </td>
+                    <td className="px-5 py-2 text-center">
+                      <span className={`inline-block px-2 py-1 rounded text-xs font-medium ${c.is_active ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-500"}`}>
+                        {c.is_active ? "有効" : "無効"}
+                      </span>
+                    </td>
+                    <td className="px-5 py-2 text-center">
+                      <div className="flex gap-2 justify-center">
+                        <button
+                          onClick={() => handleSaveEdit(c.id)}
+                          disabled={loading || !editData.companyName}
+                          className="text-xs bg-blue-600 text-white px-3 py-1 rounded hover:bg-blue-700 disabled:opacity-50"
+                        >
+                          保存
+                        </button>
+                        <button
+                          onClick={() => setEditingId(null)}
+                          className="text-xs text-gray-500 hover:text-gray-700"
+                        >
+                          取消
+                        </button>
+                      </div>
+                    </td>
+                  </>
+                ) : (
+                  <>
+                    <td className="px-5 py-3 text-gray-800 font-medium">{c.company_name}</td>
+                    <td className="px-5 py-3 text-gray-600">
+                      {c.login_id.startsWith("customer_") ? <span className="text-gray-400">未設定</span> : c.login_id}
+                    </td>
+                    <td className="px-5 py-3 text-gray-600">{c.ga4_property_id || "-"}</td>
+                    <td className="px-5 py-3 text-center">
+                      <span className={`inline-block px-2 py-1 rounded text-xs font-medium ${c.is_active ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-500"}`}>
+                        {c.is_active ? "有効" : "無効"}
+                      </span>
+                    </td>
+                    <td className="px-5 py-3 text-center">
+                      <div className="flex gap-3 justify-center">
+                        <button
+                          onClick={() => startEdit(c)}
+                          className="text-xs text-blue-600 hover:text-blue-800"
+                        >
+                          編集
+                        </button>
+                        <button
+                          onClick={() => toggleActive(c.id, c.is_active)}
+                          className="text-xs text-gray-500 hover:text-red-600"
+                        >
+                          {c.is_active ? "無効化" : "有効化"}
+                        </button>
+                      </div>
+                    </td>
+                  </>
+                )}
               </tr>
             ))}
             {customers.length === 0 && (
