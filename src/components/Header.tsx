@@ -23,6 +23,9 @@ export default function Header({ companyName, role }: HeaderProps) {
           <h1 className="text-lg font-bold text-gray-800">GA4 レポート</h1>
           {role === "admin" && (
             <nav className="flex gap-2 ml-4">
+              <a href="/admin/reports" className="text-sm text-gray-600 hover:text-blue-600 px-3 py-1 rounded hover:bg-gray-50">
+                レポート一覧
+              </a>
               <a href="/admin" className="text-sm text-gray-600 hover:text-blue-600 px-3 py-1 rounded hover:bg-gray-50">
                 顧客管理
               </a>

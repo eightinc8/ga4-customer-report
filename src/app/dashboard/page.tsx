@@ -54,11 +54,7 @@ export default async function DashboardPage() {
                 <h2 className="text-xl font-bold text-gray-800">
                   週次レポート - {session.companyName} 様
                 </h2>
-                <PdfDownloadButton
-                  companyName={session.companyName}
-                  weekStart={latest.week_start}
-                  weekEnd={latest.week_end}
-                />
+                <PdfDownloadButton />
               </div>
 
               <p className="text-sm text-gray-500 mb-4">
