@@ -1,0 +1,19 @@
+[Unit]
+Description=GA4 Customer Report App
+After=network.target
+
+[Service]
+Type=simple
+User=www-data
+Group=www-data
+WorkingDirectory=/var/www/ga4-customer-report
+ExecStart=/usr/bin/node server.js
+Restart=on-failure
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+Environment=NODE_ENV=production
+EnvironmentFile=/var/www/ga4-customer-report/.env
+
+[Install]
+WantedBy=multi-user.target

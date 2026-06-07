@@ -1,0 +1,136 @@
+============================================
+ GA4レポートアプリ - VPSデプロイ手順書
+ 対象: エックスサーバーVPS (Ubuntu 25.04)
+ サブドメイン: ga4kanri.customer8.jp
+============================================
+
+
+■ 事前準備
+
+1. DNS設定
+   エックスサーバーのDNS管理画面で以下を追加:
+   ga4kanri.customer8.jp → 162.43.47.122 (Aレコード)
+
+   ※反映に最大24時間かかる場合があります
+
+
+■ ステップ1: VPS初期セットアップ
+
+  SSH接続:
+  $ ssh root@162.43.47.122
+
+  セットアップスクリプト実行:
+  $ bash setup.sh
+
+  内容:
+  - Node.js 22 LTS インストール
+  - Nginx インストール
+  - ファイアウォール設定 (22, 80, 443のみ許可)
+  - fail2ban インストール・設定
+  - アプリディレクトリ作成
+
+
+■ ステップ2: アプリをVPSに転送
+
+  ローカルPCで実行:
+
+  (1) ビルド
+  $ cd ga4-customer-report
+  $ npm run build
+
+  (2) 必要ファイルをVPSに転送
+  $ scp -r .next/standalone/* root@162.43.47.122:/var/www/ga4-customer-report/
+  $ scp -r .next/static root@162.43.47.122:/var/www/ga4-customer-report/.next/
+  $ scp -r public root@162.43.47.122:/var/www/ga4-customer-report/
+  $ scp -r deploy root@162.43.47.122:/var/www/ga4-customer-report/
+
+
+■ ステップ3: 環境変数設定
+
+  VPSで実行:
+  $ cp /var/www/ga4-customer-report/deploy/env.production /var/www/ga4-customer-report/.env
+
+  .envファイルを編集 (必ず変更してください):
+  $ nano /var/www/ga4-customer-report/.env
+
+  JWT_SECRET=ここをランダムな32文字以上の文字列に変更
+  GAS_API_KEY=ここをランダムなAPIキーに変更
+
+  ※ランダム文字列の生成:
+  $ openssl rand -hex 32
+
+
+■ ステップ4: デプロイ実行
+
+  VPSで実行:
+  $ cd /var/www/ga4-customer-report
+  $ bash deploy/deploy.sh
+
+
+■ ステップ5: SSL証明書取得
+
+  DNSが反映された後に実行:
+  $ certbot --nginx -d ga4kanri.customer8.jp
+
+  自動更新の確認:
+  $ certbot renew --dry-run
+
+
+■ ステップ6: 動作確認
+
+  1. https://ga4kanri.customer8.jp にアクセス
+  2. admin / admin123change でログイン
+  3. 設定画面でパスワードを変更!!
+  4. 顧客を追加
+
+
+■ 運用コマンド
+
+  サービス状態確認:
+  $ systemctl status ga4report
+
+  ログ確認:
+  $ journalctl -u ga4report -f
+
+  再起動:
+  $ systemctl restart ga4report
+
+  Nginx再読み込み:
+  $ systemctl reload nginx
+
+
+■ アップデート手順
+
+  ローカルPCで:
+  $ npm run build
+
+  VPSに転送:
+  $ scp -r .next/standalone/* root@162.43.47.122:/var/www/ga4-customer-report/
+  $ scp -r .next/static root@162.43.47.122:/var/www/ga4-customer-report/.next/
+
+  VPSで再起動:
+  $ systemctl restart ga4report
+
+
+■ バックアップ
+
+  データベースのバックアップ（cronで毎日実行推奨）:
+  $ cp /var/www/ga4-customer-report/data/app.db /backup/ga4-$(date +%Y%m%d).db
+
+  crontab設定例:
+  0 3 * * * cp /var/www/ga4-customer-report/data/app.db /backup/ga4-$(date +\%Y\%m\%d).db
+
+
+■ トラブルシューティング
+
+  サービスが起動しない場合:
+  $ journalctl -u ga4report --no-pager -n 50
+
+  Nginx設定テスト:
+  $ nginx -t
+
+  ポート3000が使われているか確認:
+  $ ss -tlnp | grep 3000
+
+  DB権限の問題:
+  $ chown -R www-data:www-data /var/www/ga4-customer-report/data
