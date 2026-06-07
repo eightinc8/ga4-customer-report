@@ -140,29 +140,11 @@ export default function CustomerList({
           <h3 className="text-sm font-medium text-gray-700 mb-4">新規顧客追加</h3>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
             <div>
-              <label className="block text-sm text-gray-600 mb-1">会社名</label>
+              <label className="block text-sm text-gray-600 mb-1">会社名 <span className="text-red-500">*</span></label>
               <input
                 type="text"
                 value={formData.companyName}
                 onChange={(e) => setFormData({ ...formData, companyName: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-            </div>
-            <div>
-              <label className="block text-sm text-gray-600 mb-1">ログインID</label>
-              <input
-                type="text"
-                value={formData.loginId}
-                onChange={(e) => setFormData({ ...formData, loginId: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-            </div>
-            <div>
-              <label className="block text-sm text-gray-600 mb-1">パスワード</label>
-              <input
-                type="password"
-                value={formData.password}
-                onChange={(e) => setFormData({ ...formData, password: e.target.value })}
                 className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
             </div>
@@ -176,11 +158,31 @@ export default function CustomerList({
                 placeholder="例: 123456789"
               />
             </div>
+            <div>
+              <label className="block text-sm text-gray-600 mb-1">ログインID <span className="text-gray-400 text-xs">（任意）</span></label>
+              <input
+                type="text"
+                value={formData.loginId}
+                onChange={(e) => setFormData({ ...formData, loginId: e.target.value })}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                placeholder="顧客ログイン用（後から設定可）"
+              />
+            </div>
+            <div>
+              <label className="block text-sm text-gray-600 mb-1">パスワード <span className="text-gray-400 text-xs">（任意）</span></label>
+              <input
+                type="password"
+                value={formData.password}
+                onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                placeholder="8文字以上（後から設定可）"
+              />
+            </div>
           </div>
           <div className="flex gap-2">
             <button
               onClick={handleAdd}
-              disabled={loading || !formData.loginId || !formData.password || !formData.companyName}
+              disabled={loading || !formData.companyName}
               className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 text-sm disabled:opacity-50 transition-colors"
             >
               {loading ? "追加中..." : "追加"}

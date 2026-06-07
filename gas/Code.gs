@@ -252,3 +252,47 @@ function testSingleCustomer() {
   pushToVPS(customer.propertyId, report);
   Logger.log('VPS送信完了');
 }
+
+// ===== Webアプリ（スプレッドシート自動追加） =====
+
+/**
+ * VPSからの顧客追加リクエストを受け取り、スプレッドシートに追加
+ * デプロイ → ウェブアプリとしてデプロイ で有効化
+ */
+function doPost(e) {
+  try {
+    var data = JSON.parse(e.postData.contents);
+
+    if (data.action === 'addCustomer') {
+      var props = PropertiesService.getScriptProperties();
+      var ssId = props.getProperty('SPREADSHEET_ID');
+      var ss = SpreadsheetApp.openById(ssId);
+      var sheet = ss.getSheetByName('顧客一覧');
+
+      if (!sheet) {
+        return ContentService.createTextOutput(JSON.stringify({ error: 'シートが見つかりません' }))
+          .setMimeType(ContentService.MimeType.JSON);
+      }
+
+      // 重複チェック（GA4プロパティIDで）
+      var existingData = sheet.getDataRange().getValues();
+      for (var i = 1; i < existingData.length; i++) {
+        if (String(existingData[i][2]) === String(data.ga4PropertyId)) {
+          return ContentService.createTextOutput(JSON.stringify({ success: true, message: '既に存在します' }))
+            .setMimeType(ContentService.MimeType.JSON);
+        }
+      }
+
+      sheet.appendRow([data.companyName, data.loginId, data.ga4PropertyId, '有効']);
+
+      return ContentService.createTextOutput(JSON.stringify({ success: true }))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+
+    return ContentService.createTextOutput(JSON.stringify({ error: '不明なアクション' }))
+      .setMimeType(ContentService.MimeType.JSON);
+  } catch (err) {
+    return ContentService.createTextOutput(JSON.stringify({ error: err.message }))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+}
