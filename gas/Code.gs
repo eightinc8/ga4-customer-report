@@ -120,11 +120,15 @@ function fetchGA4Data(propertyId) {
     usersCount: currentData.usersCount,
     bounceRate: currentData.bounceRate,
     avgSessionDuration: currentData.avgSessionDuration,
+    newUsers: currentData.newUsers,
+    returningUsers: currentData.returningUsers,
     prevSessions: previousData.sessions,
     prevPageviews: previousData.pageviews,
     prevUsersCount: previousData.usersCount,
     prevBounceRate: previousData.bounceRate,
-    prevAvgSessionDuration: previousData.avgSessionDuration
+    prevAvgSessionDuration: previousData.avgSessionDuration,
+    prevNewUsers: previousData.newUsers,
+    prevReturningUsers: previousData.returningUsers
   };
 }
 
@@ -139,7 +143,9 @@ function runGA4Report(propertyId, startDate, endDate) {
       { name: 'screenPageViews' },
       { name: 'totalUsers' },
       { name: 'bounceRate' },
-      { name: 'averageSessionDuration' }
+      { name: 'averageSessionDuration' },
+      { name: 'newUsers' },
+      { name: 'activeUsers' }
     ]
   }, 'properties/' + propertyId);
 
@@ -149,17 +155,23 @@ function runGA4Report(propertyId, startDate, endDate) {
       pageviews: 0,
       usersCount: 0,
       bounceRate: 0,
-      avgSessionDuration: 0
+      avgSessionDuration: 0,
+      newUsers: 0,
+      returningUsers: 0
     };
   }
 
   var values = request.rows[0].metricValues;
+  var newUsers = parseInt(values[5].value) || 0;
+  var activeUsers = parseInt(values[6].value) || 0;
   return {
     sessions: parseInt(values[0].value) || 0,
     pageviews: parseInt(values[1].value) || 0,
     usersCount: parseInt(values[2].value) || 0,
     bounceRate: parseFloat(values[3].value) || 0,
-    avgSessionDuration: parseFloat(values[4].value) || 0
+    avgSessionDuration: parseFloat(values[4].value) || 0,
+    newUsers: newUsers,
+    returningUsers: Math.max(0, activeUsers - newUsers)
   };
 }
 
@@ -186,7 +198,11 @@ function pushToVPS(propertyId, report) {
     prevPageviews: report.prevPageviews,
     prevUsersCount: report.prevUsersCount,
     prevBounceRate: report.prevBounceRate,
-    prevAvgSessionDuration: report.prevAvgSessionDuration
+    prevAvgSessionDuration: report.prevAvgSessionDuration,
+    newUsers: report.newUsers,
+    returningUsers: report.returningUsers,
+    prevNewUsers: report.prevNewUsers,
+    prevReturningUsers: report.prevReturningUsers
   };
 
   var options = {

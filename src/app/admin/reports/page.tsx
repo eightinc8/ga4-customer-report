@@ -18,6 +18,10 @@ interface ReportRow {
   prev_pageviews: number;
   prev_users_count: number;
   prev_bounce_rate: number;
+  new_users: number;
+  returning_users: number;
+  prev_new_users: number;
+  prev_returning_users: number;
 }
 
 function changeRate(current: number, previous: number): string {
@@ -42,7 +46,7 @@ export default async function AdminReportsPage() {
        WHERE r.id IN (
          SELECT MAX(id) FROM reports GROUP BY user_id
        )
-       ORDER BY u.company_name`
+       ORDER BY r.sessions DESC`
     )
     .all() as ReportRow[];
 
@@ -68,7 +72,7 @@ export default async function AdminReportsPage() {
                   </span>
                 </div>
 
-                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-4">
                   <div>
                     <p className="text-xs text-gray-500">セッション</p>
                     <p className="text-xl font-bold text-gray-900">{r.sessions.toLocaleString()}</p>
@@ -84,10 +88,24 @@ export default async function AdminReportsPage() {
                     </p>
                   </div>
                   <div>
-                    <p className="text-xs text-gray-500">ユーザー</p>
+                    <p className="text-xs text-gray-500">ユーザー（全体）</p>
                     <p className="text-xl font-bold text-gray-900">{r.users_count.toLocaleString()}</p>
                     <p className={`text-xs ${r.users_count >= r.prev_users_count ? "text-green-600" : "text-red-600"}`}>
                       前週比 {changeRate(r.users_count, r.prev_users_count)}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-gray-500">新規ユーザー</p>
+                    <p className="text-xl font-bold text-blue-600">{(r.new_users || 0).toLocaleString()}</p>
+                    <p className={`text-xs ${(r.new_users || 0) >= (r.prev_new_users || 0) ? "text-green-600" : "text-red-600"}`}>
+                      前週比 {changeRate(r.new_users || 0, r.prev_new_users || 0)}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-gray-500">リピーター</p>
+                    <p className="text-xl font-bold text-orange-600">{(r.returning_users || 0).toLocaleString()}</p>
+                    <p className={`text-xs ${(r.returning_users || 0) >= (r.prev_returning_users || 0) ? "text-green-600" : "text-red-600"}`}>
+                      前週比 {changeRate(r.returning_users || 0, r.prev_returning_users || 0)}
                     </p>
                   </div>
                   <div>

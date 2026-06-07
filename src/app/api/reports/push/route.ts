@@ -22,8 +22,9 @@ export async function POST(request: NextRequest) {
     db.prepare(
       `INSERT OR REPLACE INTO reports
        (user_id, week_start, week_end, sessions, pageviews, users_count, bounce_rate, avg_session_duration,
-        prev_sessions, prev_pageviews, prev_users_count, prev_bounce_rate, prev_avg_session_duration)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+        prev_sessions, prev_pageviews, prev_users_count, prev_bounce_rate, prev_avg_session_duration,
+        new_users, returning_users, prev_new_users, prev_returning_users)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     ).run(
       user.id,
       data.weekStart,
@@ -37,7 +38,11 @@ export async function POST(request: NextRequest) {
       data.prevPageviews,
       data.prevUsersCount,
       data.prevBounceRate,
-      data.prevAvgSessionDuration
+      data.prevAvgSessionDuration,
+      data.newUsers || 0,
+      data.returningUsers || 0,
+      data.prevNewUsers || 0,
+      data.prevReturningUsers || 0
     );
 
     return NextResponse.json({ success: true });

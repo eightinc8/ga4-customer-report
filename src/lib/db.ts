@@ -49,6 +49,10 @@ function initSchema(db: Database.Database) {
       prev_users_count INTEGER DEFAULT 0,
       prev_bounce_rate REAL DEFAULT 0,
       prev_avg_session_duration REAL DEFAULT 0,
+      new_users INTEGER DEFAULT 0,
+      returning_users INTEGER DEFAULT 0,
+      prev_new_users INTEGER DEFAULT 0,
+      prev_returning_users INTEGER DEFAULT 0,
       created_at TEXT NOT NULL DEFAULT (datetime('now')),
       UNIQUE(user_id, week_start)
     );
@@ -63,6 +67,16 @@ function initSchema(db: Database.Database) {
       created_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
   `);
+
+  // マイグレーション: 新規/リピーターカラム追加
+  try {
+    db.exec("ALTER TABLE reports ADD COLUMN new_users INTEGER DEFAULT 0");
+    db.exec("ALTER TABLE reports ADD COLUMN returning_users INTEGER DEFAULT 0");
+    db.exec("ALTER TABLE reports ADD COLUMN prev_new_users INTEGER DEFAULT 0");
+    db.exec("ALTER TABLE reports ADD COLUMN prev_returning_users INTEGER DEFAULT 0");
+  } catch {
+    // カラムが既に存在する場合はスキップ
+  }
 
   const admin = db
     .prepare("SELECT id FROM users WHERE role = 'admin' LIMIT 1")
