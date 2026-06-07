@@ -68,14 +68,17 @@ function initSchema(db: Database.Database) {
     );
   `);
 
-  // マイグレーション: 新規/リピーターカラム追加
-  try {
-    db.exec("ALTER TABLE reports ADD COLUMN new_users INTEGER DEFAULT 0");
-    db.exec("ALTER TABLE reports ADD COLUMN returning_users INTEGER DEFAULT 0");
-    db.exec("ALTER TABLE reports ADD COLUMN prev_new_users INTEGER DEFAULT 0");
-    db.exec("ALTER TABLE reports ADD COLUMN prev_returning_users INTEGER DEFAULT 0");
-  } catch {
-    // カラムが既に存在する場合はスキップ
+  // マイグレーション
+  const migrations = [
+    "ALTER TABLE reports ADD COLUMN new_users INTEGER DEFAULT 0",
+    "ALTER TABLE reports ADD COLUMN returning_users INTEGER DEFAULT 0",
+    "ALTER TABLE reports ADD COLUMN prev_new_users INTEGER DEFAULT 0",
+    "ALTER TABLE reports ADD COLUMN prev_returning_users INTEGER DEFAULT 0",
+    "ALTER TABLE reports ADD COLUMN top_pages TEXT DEFAULT '[]'",
+    "ALTER TABLE reports ADD COLUMN top_keywords TEXT DEFAULT '[]'",
+  ];
+  for (const sql of migrations) {
+    try { db.exec(sql); } catch { /* カラムが既に存在する場合はスキップ */ }
   }
 
   const admin = db

@@ -25,7 +25,7 @@ function weeklyReport() {
     if (customer.status !== '有効') return;
 
     try {
-      const report = fetchGA4Data(customer.propertyId);
+      const report = fetchGA4Data(customer.propertyId, customer);
       pushToVPS(customer.propertyId, report);
       logResult(customer.companyName, '成功', '');
     } catch (e) {
@@ -56,13 +56,15 @@ function getCustomersFromSheet() {
   var customers = [];
 
   // 1行目はヘッダー、2行目からデータ
+  // A:会社名 B:ログインID C:GA4プロパティID D:ステータス E:サイトURL(Search Console用)
   for (var i = 1; i < data.length; i++) {
     if (data[i][0] && data[i][2]) {
       customers.push({
         companyName: data[i][0],
         loginId: data[i][1],
         propertyId: String(data[i][2]),
-        status: data[i][3] || '有効'
+        status: data[i][3] || '有効',
+        siteUrl: data[i][4] || ''
       });
     }
   }
@@ -87,7 +89,7 @@ function syncCustomersToVPS() {
 /**
  * GA4からデータを取得（今週 + 先週）
  */
-function fetchGA4Data(propertyId) {
+function fetchGA4Data(propertyId, customer) {
   var today = new Date();
   var dayOfWeek = today.getDay();
 
@@ -128,7 +130,9 @@ function fetchGA4Data(propertyId) {
     prevBounceRate: previousData.bounceRate,
     prevAvgSessionDuration: previousData.avgSessionDuration,
     prevNewUsers: previousData.newUsers,
-    prevReturningUsers: previousData.returningUsers
+    prevReturningUsers: previousData.returningUsers,
+    topPages: getTopPages(propertyId, formatDate(lastMonday), formatDate(lastSunday)),
+    topKeywords: getTopKeywords(customer.siteUrl || '', formatDate(lastMonday), formatDate(lastSunday))
   };
 }
 
@@ -202,7 +206,9 @@ function pushToVPS(propertyId, report) {
     newUsers: report.newUsers,
     returningUsers: report.returningUsers,
     prevNewUsers: report.prevNewUsers,
-    prevReturningUsers: report.prevReturningUsers
+    prevReturningUsers: report.prevReturningUsers,
+    topPages: report.topPages,
+    topKeywords: report.topKeywords
   };
 
   var options = {
@@ -220,6 +226,77 @@ function pushToVPS(propertyId, report) {
 
   if (code !== 200) {
     throw new Error('VPS API error: ' + code + ' - ' + response.getContentText());
+  }
+}
+
+// ===== 人気ページ取得 =====
+
+/**
+ * GA4から人気ページTOP10を取得
+ */
+function getTopPages(propertyId, startDate, endDate) {
+  try {
+    var request = AnalyticsData.Properties.runReport({
+      dateRanges: [{ startDate: startDate, endDate: endDate }],
+      dimensions: [
+        { name: 'pageTitle' },
+        { name: 'pagePath' }
+      ],
+      metrics: [
+        { name: 'screenPageViews' }
+      ],
+      orderBys: [{ metric: { metricName: 'screenPageViews' }, desc: true }],
+      limit: 10
+    }, 'properties/' + propertyId);
+
+    if (!request.rows || request.rows.length === 0) return [];
+
+    return request.rows.map(function(row) {
+      return {
+        title: row.dimensionValues[0].value,
+        path: row.dimensionValues[1].value,
+        views: parseInt(row.metricValues[0].value) || 0
+      };
+    });
+  } catch (e) {
+    Logger.log('getTopPages error: ' + e.message);
+    return [];
+  }
+}
+
+// ===== 人気キーワード取得（Search Console） =====
+
+/**
+ * Google Search Consoleから人気キーワードTOP10を取得
+ * サイトURLが設定されていない場合はスキップ
+ * ※ Search Console APIサービスの追加が必要
+ */
+function getTopKeywords(siteUrl, startDate, endDate) {
+  if (!siteUrl) return [];
+
+  try {
+    var response = SearchConsole.Searchanalytics.query({
+      startDate: startDate,
+      endDate: endDate,
+      dimensions: ['query'],
+      rowLimit: 10,
+      type: 'web'
+    }, siteUrl);
+
+    if (!response.rows || response.rows.length === 0) return [];
+
+    return response.rows.map(function(row) {
+      return {
+        keyword: row.keys[0],
+        clicks: row.clicks,
+        impressions: row.impressions,
+        ctr: Math.round(row.ctr * 1000) / 10,
+        position: Math.round(row.position * 10) / 10
+      };
+    });
+  } catch (e) {
+    Logger.log('getTopKeywords error: ' + e.message);
+    return [];
   }
 }
 
@@ -262,7 +339,7 @@ function testSingleCustomer() {
   var customer = customers[0];
   Logger.log('テスト対象: ' + customer.companyName);
 
-  var report = fetchGA4Data(customer.propertyId);
+  var report = fetchGA4Data(customer.propertyId, customer);
   Logger.log('取得データ: ' + JSON.stringify(report));
 
   pushToVPS(customer.propertyId, report);

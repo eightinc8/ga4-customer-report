@@ -25,6 +25,12 @@ interface Report {
   prev_users_count: number;
   prev_bounce_rate: number;
   prev_avg_session_duration: number;
+  new_users: number;
+  returning_users: number;
+  prev_new_users: number;
+  prev_returning_users: number;
+  top_pages: string;
+  top_keywords: string;
 }
 
 export default async function CustomerReportPage({

@@ -3,6 +3,20 @@
 import { useState } from "react";
 import ReportCard from "@/components/ReportCard";
 
+interface PageItem {
+  title: string;
+  path: string;
+  views: number;
+}
+
+interface KeywordItem {
+  keyword: string;
+  clicks: number;
+  impressions: number;
+  ctr: number;
+  position: number;
+}
+
 interface Report {
   id: number;
   week_start: string;
@@ -17,6 +31,12 @@ interface Report {
   prev_users_count: number;
   prev_bounce_rate: number;
   prev_avg_session_duration: number;
+  new_users: number;
+  returning_users: number;
+  prev_new_users: number;
+  prev_returning_users: number;
+  top_pages: string;
+  top_keywords: string;
 }
 
 type Period = "1w" | "1m" | "3m";
@@ -110,9 +130,82 @@ export default function ReportDetail({
             <ReportCard label="セッション数" current={latest.sessions} previous={latest.prev_sessions} />
             <ReportCard label="ページビュー" current={latest.pageviews} previous={latest.prev_pageviews} />
             <ReportCard label="ユーザー数" current={latest.users_count} previous={latest.prev_users_count} />
+            <ReportCard label="新規ユーザー" current={latest.new_users || 0} previous={latest.prev_new_users || 0} />
+            <ReportCard label="リピーター" current={latest.returning_users || 0} previous={latest.prev_returning_users || 0} />
             <ReportCard label="直帰率" current={latest.bounce_rate} previous={latest.prev_bounce_rate} isPercentage invertColor />
             <ReportCard label="平均セッション時間" current={Math.round(latest.avg_session_duration)} previous={Math.round(latest.prev_avg_session_duration)} unit="秒" />
           </div>
+
+          {/* 人気ページ */}
+          {(() => {
+            const pages: PageItem[] = (() => { try { return JSON.parse(latest.top_pages || "[]"); } catch { return []; } })();
+            if (pages.length === 0) return null;
+            return (
+              <div className="mt-6">
+                <h4 className="text-sm font-medium text-gray-700 mb-3">人気ページ TOP10</h4>
+                <div className="bg-gray-50 rounded-lg overflow-hidden">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-gray-200">
+                        <th className="text-left px-4 py-2 text-gray-500 font-medium w-8">#</th>
+                        <th className="text-left px-4 py-2 text-gray-500 font-medium">ページタイトル</th>
+                        <th className="text-right px-4 py-2 text-gray-500 font-medium">PV</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {pages.map((p: PageItem, i: number) => (
+                        <tr key={i} className="border-b border-gray-100">
+                          <td className="px-4 py-2 text-gray-400">{i + 1}</td>
+                          <td className="px-4 py-2">
+                            <p className="text-gray-800 truncate max-w-md">{p.title}</p>
+                            <p className="text-xs text-gray-400 truncate max-w-md">{p.path}</p>
+                          </td>
+                          <td className="text-right px-4 py-2 text-gray-700 font-medium">{p.views.toLocaleString()}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            );
+          })()}
+
+          {/* 人気キーワード */}
+          {(() => {
+            const keywords: KeywordItem[] = (() => { try { return JSON.parse(latest.top_keywords || "[]"); } catch { return []; } })();
+            if (keywords.length === 0) return null;
+            return (
+              <div className="mt-6">
+                <h4 className="text-sm font-medium text-gray-700 mb-3">検索キーワード TOP10</h4>
+                <div className="bg-gray-50 rounded-lg overflow-hidden">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-gray-200">
+                        <th className="text-left px-4 py-2 text-gray-500 font-medium w-8">#</th>
+                        <th className="text-left px-4 py-2 text-gray-500 font-medium">キーワード</th>
+                        <th className="text-right px-4 py-2 text-gray-500 font-medium">クリック</th>
+                        <th className="text-right px-4 py-2 text-gray-500 font-medium">表示回数</th>
+                        <th className="text-right px-4 py-2 text-gray-500 font-medium">CTR</th>
+                        <th className="text-right px-4 py-2 text-gray-500 font-medium">掲載順位</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {keywords.map((k: KeywordItem, i: number) => (
+                        <tr key={i} className="border-b border-gray-100">
+                          <td className="px-4 py-2 text-gray-400">{i + 1}</td>
+                          <td className="px-4 py-2 text-gray-800">{k.keyword}</td>
+                          <td className="text-right px-4 py-2 text-gray-700">{k.clicks}</td>
+                          <td className="text-right px-4 py-2 text-gray-700">{k.impressions.toLocaleString()}</td>
+                          <td className="text-right px-4 py-2 text-gray-700">{k.ctr}%</td>
+                          <td className="text-right px-4 py-2 text-gray-700">{k.position}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            );
+          })()}
         </div>
       ) : (
         /* 1ヶ月・3ヶ月：合計 + 週次一覧 */
