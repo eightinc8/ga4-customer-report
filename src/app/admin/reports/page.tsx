@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import Header from "@/components/Header";
 
 interface ReportRow {
+  user_id: number;
   company_name: string;
   login_id: string;
   week_start: string;
@@ -59,9 +60,9 @@ export default async function AdminReportsPage() {
         ) : (
           <div className="space-y-6">
             {latestReports.map((r) => (
-              <div key={r.login_id} className="bg-white rounded-lg border border-gray-200 p-6">
+              <a key={r.login_id} href={`/admin/reports/${r.user_id}`} className="block bg-white rounded-lg border border-gray-200 p-6 hover:border-blue-300 hover:shadow-md transition-all cursor-pointer">
                 <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-lg font-bold text-gray-800">{r.company_name}</h3>
+                  <h3 className="text-lg font-bold text-gray-800">{r.company_name} <span className="text-sm font-normal text-blue-600">→ 詳細</span></h3>
                   <span className="text-sm text-gray-500">
                     {r.week_start} 〜 {r.week_end}
                   </span>
@@ -101,7 +102,7 @@ export default async function AdminReportsPage() {
                     <p className="text-xl font-bold text-gray-900">{Math.round(r.avg_session_duration)}秒</p>
                   </div>
                 </div>
-              </div>
+              </a>
             ))}
           </div>
         )}

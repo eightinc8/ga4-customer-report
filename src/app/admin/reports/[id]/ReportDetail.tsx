@@ -1,0 +1,191 @@
+"use client";
+
+import { useState } from "react";
+import ReportCard from "@/components/ReportCard";
+
+interface Report {
+  id: number;
+  week_start: string;
+  week_end: string;
+  sessions: number;
+  pageviews: number;
+  users_count: number;
+  bounce_rate: number;
+  avg_session_duration: number;
+  prev_sessions: number;
+  prev_pageviews: number;
+  prev_users_count: number;
+  prev_bounce_rate: number;
+  prev_avg_session_duration: number;
+}
+
+type Period = "1w" | "1m" | "3m";
+
+export default function ReportDetail({
+  reports,
+  companyName,
+}: {
+  reports: Report[];
+  companyName: string;
+}) {
+  const [period, setPeriod] = useState<Period>("1w");
+
+  const filteredReports = (() => {
+    if (reports.length === 0) return [];
+    const now = new Date();
+    switch (period) {
+      case "1w":
+        return reports.slice(0, 1);
+      case "1m": {
+        const oneMonthAgo = new Date(now);
+        oneMonthAgo.setMonth(now.getMonth() - 1);
+        return reports.filter((r) => new Date(r.week_start) >= oneMonthAgo);
+      }
+      case "3m": {
+        const threeMonthsAgo = new Date(now);
+        threeMonthsAgo.setMonth(now.getMonth() - 3);
+        return reports.filter((r) => new Date(r.week_start) >= threeMonthsAgo);
+      }
+    }
+  })();
+
+  const latest = reports[0] || null;
+
+  const periodLabels: Record<Period, string> = {
+    "1w": "最新週",
+    "1m": "1ヶ月",
+    "3m": "3ヶ月",
+  };
+
+  // 期間合計の計算（1ヶ月・3ヶ月の場合）
+  const totals =
+    filteredReports.length > 1
+      ? {
+          sessions: filteredReports.reduce((s, r) => s + r.sessions, 0),
+          pageviews: filteredReports.reduce((s, r) => s + r.pageviews, 0),
+          users: filteredReports.reduce((s, r) => s + r.users_count, 0),
+          avgBounceRate:
+            filteredReports.reduce((s, r) => s + r.bounce_rate, 0) /
+            filteredReports.length,
+          avgDuration:
+            filteredReports.reduce((s, r) => s + r.avg_session_duration, 0) /
+            filteredReports.length,
+        }
+      : null;
+
+  return (
+    <>
+      {/* 期間切替ボタン */}
+      <div className="flex gap-2 mb-6">
+        {(["1w", "1m", "3m"] as Period[]).map((p) => (
+          <button
+            key={p}
+            onClick={() => setPeriod(p)}
+            className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+              period === p
+                ? "bg-blue-600 text-white"
+                : "bg-white border border-gray-300 text-gray-700 hover:bg-gray-50"
+            }`}
+          >
+            {periodLabels[p]}
+          </button>
+        ))}
+      </div>
+
+      {!latest ? (
+        <div className="bg-white rounded-lg border border-gray-200 p-12 text-center">
+          <p className="text-gray-500">レポートデータがありません</p>
+        </div>
+      ) : period === "1w" ? (
+        /* 最新週：カード表示 */
+        <div id="report-content" className="bg-white rounded-lg border border-gray-200 p-8 mb-6">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-lg font-bold text-gray-800">{companyName}</h3>
+            <span className="text-sm text-gray-500">
+              {latest.week_start} 〜 {latest.week_end}
+            </span>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            <ReportCard label="セッション数" current={latest.sessions} previous={latest.prev_sessions} />
+            <ReportCard label="ページビュー" current={latest.pageviews} previous={latest.prev_pageviews} />
+            <ReportCard label="ユーザー数" current={latest.users_count} previous={latest.prev_users_count} />
+            <ReportCard label="直帰率" current={latest.bounce_rate} previous={latest.prev_bounce_rate} isPercentage invertColor />
+            <ReportCard label="平均セッション時間" current={Math.round(latest.avg_session_duration)} previous={Math.round(latest.prev_avg_session_duration)} unit="秒" />
+          </div>
+        </div>
+      ) : (
+        /* 1ヶ月・3ヶ月：合計 + 週次一覧 */
+        <>
+          {totals && (
+            <div className="bg-white rounded-lg border border-gray-200 p-6 mb-6">
+              <h3 className="text-sm font-medium text-gray-700 mb-4">
+                {periodLabels[period]}の合計・平均（{filteredReports.length}週分）
+              </h3>
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
+                <div>
+                  <p className="text-xs text-gray-500">セッション合計</p>
+                  <p className="text-xl font-bold text-gray-900">{totals.sessions.toLocaleString()}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-gray-500">PV合計</p>
+                  <p className="text-xl font-bold text-gray-900">{totals.pageviews.toLocaleString()}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-gray-500">ユーザー合計</p>
+                  <p className="text-xl font-bold text-gray-900">{totals.users.toLocaleString()}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-gray-500">平均直帰率</p>
+                  <p className="text-xl font-bold text-gray-900">{totals.avgBounceRate.toFixed(1)}%</p>
+                </div>
+                <div>
+                  <p className="text-xs text-gray-500">平均セッション時間</p>
+                  <p className="text-xl font-bold text-gray-900">{Math.round(totals.avgDuration)}秒</p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
+            <table className="w-full text-sm">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th className="text-left px-5 py-3 text-gray-500 font-medium">期間</th>
+                  <th className="text-right px-5 py-3 text-gray-500 font-medium">セッション</th>
+                  <th className="text-right px-5 py-3 text-gray-500 font-medium">PV</th>
+                  <th className="text-right px-5 py-3 text-gray-500 font-medium">ユーザー</th>
+                  <th className="text-right px-5 py-3 text-gray-500 font-medium">直帰率</th>
+                  <th className="text-right px-5 py-3 text-gray-500 font-medium">前週比</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredReports.map((r) => {
+                  const sessionDiff =
+                    r.prev_sessions === 0
+                      ? "-"
+                      : `${(((r.sessions - r.prev_sessions) / r.prev_sessions) * 100).toFixed(1)}%`;
+                  const isUp = r.sessions >= r.prev_sessions;
+                  return (
+                    <tr key={r.id} className="border-t border-gray-100 hover:bg-gray-50">
+                      <td className="px-5 py-2 text-gray-700">
+                        {r.week_start} 〜 {r.week_end}
+                      </td>
+                      <td className="text-right px-5 py-2 text-gray-700">{r.sessions.toLocaleString()}</td>
+                      <td className="text-right px-5 py-2 text-gray-700">{r.pageviews.toLocaleString()}</td>
+                      <td className="text-right px-5 py-2 text-gray-700">{r.users_count.toLocaleString()}</td>
+                      <td className="text-right px-5 py-2 text-gray-700">{r.bounce_rate.toFixed(1)}%</td>
+                      <td className={`text-right px-5 py-2 font-medium ${isUp ? "text-green-600" : "text-red-600"}`}>
+                        {sessionDiff}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
+    </>
+  );
+}
