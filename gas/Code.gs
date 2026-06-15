@@ -114,6 +114,10 @@ function fetchGA4Data(propertyId, customer) {
   // 先々週分
   var previousData = runGA4Report(propertyId, formatDate(prevMonday), formatDate(prevSunday));
 
+  // 流入元別セッション
+  var trafficSources = getTrafficSources(propertyId, formatDate(lastMonday), formatDate(lastSunday));
+  var prevTrafficSources = getTrafficSources(propertyId, formatDate(prevMonday), formatDate(prevSunday));
+
   return {
     weekStart: formatDate(lastMonday),
     weekEnd: formatDate(lastSunday),
@@ -132,7 +136,9 @@ function fetchGA4Data(propertyId, customer) {
     prevNewUsers: previousData.newUsers,
     prevReturningUsers: previousData.returningUsers,
     topPages: getTopPages(propertyId, formatDate(lastMonday), formatDate(lastSunday)),
-    topKeywords: getTopKeywords(customer.siteUrl || '', formatDate(lastMonday), formatDate(lastSunday))
+    topKeywords: getTopKeywords(customer.siteUrl || '', formatDate(lastMonday), formatDate(lastSunday)),
+    trafficSources: trafficSources,
+    prevTrafficSources: prevTrafficSources
   };
 }
 
@@ -208,7 +214,9 @@ function pushToVPS(propertyId, report) {
     prevNewUsers: report.prevNewUsers,
     prevReturningUsers: report.prevReturningUsers,
     topPages: report.topPages,
-    topKeywords: report.topKeywords
+    topKeywords: report.topKeywords,
+    trafficSources: report.trafficSources,
+    prevTrafficSources: report.prevTrafficSources
   };
 
   var options = {
@@ -297,6 +305,76 @@ function getTopKeywords(siteUrl, startDate, endDate) {
   } catch (e) {
     Logger.log('getTopKeywords error: ' + e.message);
     return [];
+  }
+}
+
+// ===== 流入元別セッション取得 =====
+
+/**
+ * GA4からチャネル別セッション数を取得
+ * 直接流入・自然検索・AI検索・SNS流入・その他 に分類
+ */
+function getTrafficSources(propertyId, startDate, endDate) {
+  try {
+    // チャネルグループ別セッション
+    var channelReport = AnalyticsData.Properties.runReport({
+      dateRanges: [{ startDate: startDate, endDate: endDate }],
+      dimensions: [{ name: 'sessionDefaultChannelGroup' }],
+      metrics: [{ name: 'sessions' }]
+    }, 'properties/' + propertyId);
+
+    var channels = { direct: 0, organic_search: 0, social: 0, other: 0 };
+    if (channelReport.rows) {
+      channelReport.rows.forEach(function(row) {
+        var group = row.dimensionValues[0].value.toLowerCase();
+        var sessions = parseInt(row.metricValues[0].value) || 0;
+        if (group === 'direct') {
+          channels.direct += sessions;
+        } else if (group === 'organic search') {
+          channels.organic_search += sessions;
+        } else if (group === 'organic social' || group === 'paid social') {
+          channels.social += sessions;
+        } else {
+          channels.other += sessions;
+        }
+      });
+    }
+
+    // AI検索ソースの識別
+    var aiSources = ['chatgpt.com', 'perplexity', 'you.com', 'claude.ai', 'copilot',
+                     'gemini.google', 'bard', 'phind', 'poe.com', 'ai-overview'];
+    var aiReport = AnalyticsData.Properties.runReport({
+      dateRanges: [{ startDate: startDate, endDate: endDate }],
+      dimensions: [{ name: 'sessionSource' }],
+      metrics: [{ name: 'sessions' }]
+    }, 'properties/' + propertyId);
+
+    var aiSessions = 0;
+    if (aiReport.rows) {
+      aiReport.rows.forEach(function(row) {
+        var source = (row.dimensionValues[0].value || '').toLowerCase();
+        for (var i = 0; i < aiSources.length; i++) {
+          if (source.indexOf(aiSources[i]) !== -1) {
+            aiSessions += parseInt(row.metricValues[0].value) || 0;
+            break;
+          }
+        }
+      });
+    }
+
+    // AI検索分を自然検索から差し引く
+    channels.organic_search = Math.max(0, channels.organic_search - aiSessions);
+
+    return {
+      direct: channels.direct,
+      organic_search: channels.organic_search,
+      ai_search: aiSessions,
+      social: channels.social,
+      other: channels.other
+    };
+  } catch (e) {
+    Logger.log('getTrafficSources error: ' + e.message);
+    return { direct: 0, organic_search: 0, ai_search: 0, social: 0, other: 0 };
   }
 }
 

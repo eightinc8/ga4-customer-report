@@ -76,6 +76,8 @@ function initSchema(db: Database.Database) {
     "ALTER TABLE reports ADD COLUMN prev_returning_users INTEGER DEFAULT 0",
     "ALTER TABLE reports ADD COLUMN top_pages TEXT DEFAULT '[]'",
     "ALTER TABLE reports ADD COLUMN top_keywords TEXT DEFAULT '[]'",
+    "ALTER TABLE reports ADD COLUMN traffic_sources TEXT DEFAULT '{}'",
+    "ALTER TABLE reports ADD COLUMN prev_traffic_sources TEXT DEFAULT '{}'",
   ];
   for (const sql of migrations) {
     try { db.exec(sql); } catch { /* カラムが既に存在する場合はスキップ */ }

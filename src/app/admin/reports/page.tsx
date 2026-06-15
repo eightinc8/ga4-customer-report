@@ -22,6 +22,7 @@ interface ReportRow {
   returning_users: number;
   prev_new_users: number;
   prev_returning_users: number;
+  traffic_sources: string;
 }
 
 function changeRate(current: number, previous: number): string {
@@ -120,6 +121,40 @@ export default async function AdminReportsPage() {
                     <p className="text-xl font-bold text-gray-900">{Math.round(r.avg_session_duration)}秒</p>
                   </div>
                 </div>
+
+                {/* 流入元バー */}
+                {(() => {
+                  let ts: { direct?: number; organic_search?: number; ai_search?: number; social?: number; other?: number };
+                  try { ts = JSON.parse(r.traffic_sources || "{}"); } catch { ts = {}; }
+                  const d = ts.direct || 0, o = ts.organic_search || 0, a = ts.ai_search || 0, s = ts.social || 0, ot = ts.other || 0;
+                  const total = d + o + a + s + ot;
+                  if (total === 0) return null;
+                  const items = [
+                    { label: "直接", v: d, c: "bg-blue-500" },
+                    { label: "自然検索", v: o, c: "bg-green-500" },
+                    { label: "AI", v: a, c: "bg-purple-500" },
+                    { label: "SNS", v: s, c: "bg-pink-500" },
+                    { label: "他", v: ot, c: "bg-gray-400" },
+                  ];
+                  return (
+                    <div className="mt-4 pt-4 border-t border-gray-100">
+                      <p className="text-xs text-gray-500 mb-1.5">流入元</p>
+                      <div className="flex h-2.5 rounded-full overflow-hidden mb-1.5">
+                        {items.filter(i => i.v > 0).map((item, idx) => (
+                          <div key={idx} className={item.c} style={{ width: `${(item.v / total) * 100}%` }} />
+                        ))}
+                      </div>
+                      <div className="flex gap-3 text-xs text-gray-500">
+                        {items.filter(i => i.v > 0).map((item, idx) => (
+                          <span key={idx} className="flex items-center gap-1">
+                            <span className={`inline-block w-2 h-2 rounded-full ${item.c}`} />
+                            {item.label} {item.v.toLocaleString()}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })()}
               </a>
             ))}
           </div>

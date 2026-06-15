@@ -31,6 +31,8 @@ interface Report {
   prev_returning_users: number;
   top_pages: string;
   top_keywords: string;
+  traffic_sources: string;
+  prev_traffic_sources: string;
 }
 
 export default async function CustomerReportPage({

@@ -17,6 +17,14 @@ interface KeywordItem {
   position: number;
 }
 
+interface TrafficSources {
+  direct: number;
+  organic_search: number;
+  ai_search: number;
+  social: number;
+  other: number;
+}
+
 interface Report {
   id: number;
   week_start: string;
@@ -37,6 +45,8 @@ interface Report {
   prev_returning_users: number;
   top_pages: string;
   top_keywords: string;
+  traffic_sources: string;
+  prev_traffic_sources: string;
 }
 
 type Period = "1w" | "1m" | "3m";
@@ -135,6 +145,53 @@ export default function ReportDetail({
             <ReportCard label="直帰率" current={latest.bounce_rate} previous={latest.prev_bounce_rate} isPercentage invertColor />
             <ReportCard label="平均セッション時間" current={Math.round(latest.avg_session_duration)} previous={Math.round(latest.prev_avg_session_duration)} unit="秒" />
           </div>
+
+          {/* 流入元別セッション */}
+          {(() => {
+            const ts: TrafficSources = (() => { try { return JSON.parse(latest.traffic_sources || "{}"); } catch { return {}; } })();
+            const pts: TrafficSources = (() => { try { return JSON.parse(latest.prev_traffic_sources || "{}"); } catch { return {}; } })();
+            const hasData = (ts.direct || 0) + (ts.organic_search || 0) + (ts.ai_search || 0) + (ts.social || 0) + (ts.other || 0) > 0;
+            if (!hasData) return null;
+            const total = (ts.direct || 0) + (ts.organic_search || 0) + (ts.ai_search || 0) + (ts.social || 0) + (ts.other || 0);
+            const items = [
+              { label: "直接流入", value: ts.direct || 0, prev: pts.direct || 0, color: "bg-blue-500" },
+              { label: "自然検索", value: ts.organic_search || 0, prev: pts.organic_search || 0, color: "bg-green-500" },
+              { label: "AI検索", value: ts.ai_search || 0, prev: pts.ai_search || 0, color: "bg-purple-500" },
+              { label: "SNS流入", value: ts.social || 0, prev: pts.social || 0, color: "bg-pink-500" },
+              { label: "その他", value: ts.other || 0, prev: pts.other || 0, color: "bg-gray-400" },
+            ];
+            return (
+              <div className="mt-6">
+                <h4 className="text-sm font-medium text-gray-700 mb-3">流入元別セッション</h4>
+                {/* バー */}
+                <div className="flex h-4 rounded-full overflow-hidden mb-3">
+                  {items.filter(i => i.value > 0).map((item, idx) => (
+                    <div key={idx} className={`${item.color}`} style={{ width: `${(item.value / total) * 100}%` }} title={`${item.label}: ${item.value}`} />
+                  ))}
+                </div>
+                {/* 数値 */}
+                <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+                  {items.map((item, idx) => {
+                    const diff = item.prev === 0 ? "-" : `${((item.value - item.prev) / item.prev * 100) > 0 ? "+" : ""}${((item.value - item.prev) / item.prev * 100).toFixed(1)}%`;
+                    const pct = total > 0 ? ((item.value / total) * 100).toFixed(1) : "0";
+                    return (
+                      <div key={idx} className="bg-gray-50 rounded-lg p-3">
+                        <div className="flex items-center gap-1.5 mb-1">
+                          <div className={`w-2.5 h-2.5 rounded-full ${item.color}`} />
+                          <span className="text-xs text-gray-500">{item.label}</span>
+                        </div>
+                        <p className="text-lg font-bold text-gray-900">{item.value.toLocaleString()}</p>
+                        <p className="text-xs text-gray-400">{pct}%</p>
+                        <p className={`text-xs ${item.value >= item.prev ? "text-green-600" : "text-red-600"}`}>
+                          前週比 {diff}
+                        </p>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })()}
 
           {/* 人気ページ */}
           {(() => {
