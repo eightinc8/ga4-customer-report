@@ -35,7 +35,7 @@ body {
   /* メインの余白・最大幅を解除して紙幅いっぱいに */
   main { padding: 0 !important; max-width: 100% !important; margin: 0 !important; }
   #report-content { border: none !important; box-shadow: none !important; padding: 0 !important; }
-  /* カード・表が途中で改ページされないように */
-  .bg-white, table, tr { break-inside: avoid; page-break-inside: avoid; }
+  /* 表の行だけ途中で改ページされないように（大きなカードには適用しない） */
+  tr { break-inside: avoid; page-break-inside: avoid; }
   @page { margin: 12mm; size: A4 portrait; }
 }
