@@ -135,7 +135,7 @@ function fetchGA4Data(propertyId, customer) {
     prevAvgSessionDuration: previousData.avgSessionDuration,
     prevNewUsers: previousData.newUsers,
     prevReturningUsers: previousData.returningUsers,
-    topPages: getTopPages(propertyId, formatDate(lastMonday), formatDate(lastSunday)),
+    topPages: getTopPages(propertyId, formatDate(lastMonday), formatDate(lastSunday), formatDate(prevMonday), formatDate(prevSunday)),
     topKeywords: getTopKeywords(customer.siteUrl || '', formatDate(lastMonday), formatDate(lastSunday)),
     trafficSources: trafficSources,
     prevTrafficSources: prevTrafficSources
@@ -240,9 +240,9 @@ function pushToVPS(propertyId, report) {
 // ===== 人気ページ取得 =====
 
 /**
- * GA4から人気ページTOP10を取得
+ * GA4から人気ページTOP10を取得（前週PVも付与）
  */
-function getTopPages(propertyId, startDate, endDate) {
+function getTopPages(propertyId, startDate, endDate, prevStartDate, prevEndDate) {
   try {
     var request = AnalyticsData.Properties.runReport({
       dateRanges: [{ startDate: startDate, endDate: endDate }],
@@ -259,13 +259,47 @@ function getTopPages(propertyId, startDate, endDate) {
 
     if (!request.rows || request.rows.length === 0) return [];
 
-    return request.rows.map(function(row) {
+    var pages = request.rows.map(function(row) {
       return {
         title: row.dimensionValues[0].value,
         path: row.dimensionValues[1].value,
-        views: parseInt(row.metricValues[0].value) || 0
+        views: parseInt(row.metricValues[0].value) || 0,
+        prevViews: 0
       };
     });
+
+    // 前週の同ページPVを取得してマッチング
+    if (prevStartDate && prevEndDate) {
+      try {
+        var paths = pages.map(function(p) { return p.path; });
+        var prevReport = AnalyticsData.Properties.runReport({
+          dateRanges: [{ startDate: prevStartDate, endDate: prevEndDate }],
+          dimensions: [{ name: 'pagePath' }],
+          metrics: [{ name: 'screenPageViews' }],
+          dimensionFilter: {
+            filter: {
+              fieldName: 'pagePath',
+              inListFilter: { values: paths }
+            }
+          },
+          limit: 100
+        }, 'properties/' + propertyId);
+
+        var prevMap = {};
+        if (prevReport.rows) {
+          prevReport.rows.forEach(function(row) {
+            prevMap[row.dimensionValues[0].value] = parseInt(row.metricValues[0].value) || 0;
+          });
+        }
+        pages.forEach(function(p) {
+          p.prevViews = prevMap[p.path] || 0;
+        });
+      } catch (e) {
+        Logger.log('getTopPages prev error: ' + e.message);
+      }
+    }
+
+    return pages;
   } catch (e) {
     Logger.log('getTopPages error: ' + e.message);
     return [];

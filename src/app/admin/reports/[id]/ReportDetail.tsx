@@ -7,6 +7,7 @@ interface PageItem {
   title: string;
   path: string;
   views: number;
+  prevViews?: number;
 }
 
 interface KeywordItem {
@@ -225,10 +226,14 @@ export default function ReportDetail({
                         <th className="text-left px-4 py-2 text-gray-500 font-medium w-8">#</th>
                         <th className="text-left px-4 py-2 text-gray-500 font-medium">ページタイトル</th>
                         <th className="text-right px-4 py-2 text-gray-500 font-medium">PV</th>
+                        <th className="text-right px-4 py-2 text-gray-500 font-medium">前週比</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {pages.map((p: PageItem, i: number) => (
+                      {pages.map((p: PageItem, i: number) => {
+                        const prev = p.prevViews || 0;
+                        const diff = prev === 0 ? null : ((p.views - prev) / prev) * 100;
+                        return (
                         <tr key={i} className="border-b border-gray-100">
                           <td className="px-4 py-2 text-gray-400">{i + 1}</td>
                           <td className="px-4 py-2">
@@ -236,8 +241,18 @@ export default function ReportDetail({
                             <p className="text-xs text-gray-400 truncate max-w-md">{p.path}</p>
                           </td>
                           <td className="text-right px-4 py-2 text-gray-700 font-medium">{p.views.toLocaleString()}</td>
+                          <td className="text-right px-4 py-2 text-xs">
+                            {diff === null ? (
+                              <span className="text-blue-500">新規</span>
+                            ) : (
+                              <span className={p.views >= prev ? "text-green-600" : "text-red-600"}>
+                                {diff > 0 ? "+" : ""}{diff.toFixed(1)}%
+                              </span>
+                            )}
+                          </td>
                         </tr>
-                      ))}
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>
