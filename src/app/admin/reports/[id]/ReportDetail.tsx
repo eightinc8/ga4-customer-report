@@ -40,6 +40,54 @@ interface KeywordItem {
   position: number;
 }
 
+interface TrackedPageItem {
+  path: string;
+  label?: string;
+  url?: string;
+  views: number;
+  prevViews?: number;
+  bounceRate: number;
+  prevBounceRate?: number;
+  avgEngagementTime: number;
+  prevAvgEngagementTime?: number;
+  scrollRate: number;
+  prevScrollRate?: number;
+  trend?: number[];
+}
+
+// 指標カード（前週比つき）
+function Metric({
+  label,
+  value,
+  cur,
+  prev,
+  invert,
+}: {
+  label: string;
+  value: string;
+  cur: number;
+  prev?: number;
+  invert?: boolean;
+}) {
+  const p = prev ?? 0;
+  const diff = p === 0 ? null : ((cur - p) / p) * 100;
+  const good = diff === null ? true : invert ? cur <= p : cur >= p;
+  return (
+    <div className="bg-white rounded-md p-3 border border-gray-100">
+      <p className="text-xs text-gray-500">{label}</p>
+      <p className="text-lg font-bold text-gray-900">{value}</p>
+      {diff === null ? (
+        <p className="text-xs text-gray-400">前週比 -</p>
+      ) : (
+        <p className={`text-xs ${good ? "text-green-600" : "text-red-600"}`}>
+          前週比 {diff > 0 ? "+" : ""}
+          {diff.toFixed(1)}%
+        </p>
+      )}
+    </div>
+  );
+}
+
 interface TrafficSources {
   direct: number;
   organic_search: number;
@@ -70,6 +118,7 @@ interface Report {
   top_keywords: string;
   traffic_sources: string;
   prev_traffic_sources: string;
+  tracked_pages: string;
 }
 
 type Period = "1w" | "1m" | "3m";
@@ -230,6 +279,48 @@ export default function ReportDetail({
                     );
                   })}
                 </div>
+              </div>
+            );
+          })()}
+
+          {/* 登録ページの計測 */}
+          {(() => {
+            const tracked: TrackedPageItem[] = (() => { try { return JSON.parse(latest.tracked_pages || "[]"); } catch { return []; } })();
+            if (tracked.length === 0) return null;
+            return (
+              <div className="mt-6">
+                <h4 className="text-sm font-medium text-gray-700 mb-3">登録ページの計測</h4>
+                <div className="space-y-4">
+                  {tracked.map((tp: TrackedPageItem, i: number) => (
+                    <div key={i} className="bg-gray-50 rounded-lg p-4">
+                      <div className="flex items-start justify-between gap-3 mb-3">
+                        <div className="min-w-0">
+                          {tp.url ? (
+                            <a href={tp.url} target="_blank" rel="noopener noreferrer" className="text-sm font-medium text-blue-600 hover:underline truncate block">
+                              {tp.label || tp.path}
+                            </a>
+                          ) : (
+                            <p className="text-sm font-medium text-gray-800 truncate">{tp.label || tp.path}</p>
+                          )}
+                          <p className="text-xs text-gray-400 truncate">{tp.path}</p>
+                        </div>
+                        <div className="shrink-0 text-center" title={(tp.trend || []).join(" → ")}>
+                          <Sparkline data={tp.trend || []} />
+                          <p className="text-[10px] text-gray-400">PV推移(8週)</p>
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                        <Metric label="PV" value={tp.views.toLocaleString()} cur={tp.views} prev={tp.prevViews} />
+                        <Metric label="直帰率" value={`${(tp.bounceRate || 0).toFixed(1)}%`} cur={tp.bounceRate || 0} prev={tp.prevBounceRate} invert />
+                        <Metric label="滞在時間" value={`${Math.round(tp.avgEngagementTime || 0)}秒`} cur={tp.avgEngagementTime || 0} prev={tp.prevAvgEngagementTime} />
+                        <Metric label="スクロール率" value={`${(tp.scrollRate || 0).toFixed(1)}%`} cur={tp.scrollRate || 0} prev={tp.prevScrollRate} />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <p className="text-xs text-gray-400 mt-2">
+                  ※ スクロール率＝ページ末尾付近（90%）まで読まれた割合の目安。滞在時間＝平均エンゲージメント時間。
+                </p>
               </div>
             );
           })()}

@@ -3,6 +3,7 @@ import { getDb } from "@/lib/db";
 import { redirect } from "next/navigation";
 import Header from "@/components/Header";
 import ReportDetail from "./ReportDetail";
+import TrackedPagesManager from "./TrackedPagesManager";
 
 interface User {
   id: number;
@@ -33,6 +34,7 @@ interface Report {
   top_keywords: string;
   traffic_sources: string;
   prev_traffic_sources: string;
+  tracked_pages: string;
 }
 
 export default async function CustomerReportPage({
@@ -74,6 +76,8 @@ export default async function CustomerReportPage({
         <p className="text-sm text-gray-500 mb-6 print:hidden">
           GA4 プロパティID: {customer.ga4_property_id}
         </p>
+
+        <TrackedPagesManager userId={customer.id} />
 
         <ReportDetail reports={reports} companyName={customer.company_name} />
       </main>

@@ -66,6 +66,15 @@ function initSchema(db: Database.Database) {
       success INTEGER NOT NULL,
       created_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
+
+    CREATE TABLE IF NOT EXISTS tracked_pages (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER NOT NULL REFERENCES users(id),
+      path TEXT NOT NULL,
+      label TEXT,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      UNIQUE(user_id, path)
+    );
   `);
 
   // マイグレーション
@@ -78,6 +87,7 @@ function initSchema(db: Database.Database) {
     "ALTER TABLE reports ADD COLUMN top_keywords TEXT DEFAULT '[]'",
     "ALTER TABLE reports ADD COLUMN traffic_sources TEXT DEFAULT '{}'",
     "ALTER TABLE reports ADD COLUMN prev_traffic_sources TEXT DEFAULT '{}'",
+    "ALTER TABLE reports ADD COLUMN tracked_pages TEXT DEFAULT '[]'",
   ];
   for (const sql of migrations) {
     try { db.exec(sql); } catch { /* カラムが既に存在する場合はスキップ */ }

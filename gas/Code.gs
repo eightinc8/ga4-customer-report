@@ -136,6 +136,36 @@ function fetchGA4Data(propertyId, customer) {
     p.trend = weekKeys.map(function(k) { return m[k] || 0; });
   });
 
+  // 登録ページの詳細計測
+  var trackedPages = [];
+  var trackedList = getTrackedPathsFromVPS(propertyId);
+  if (trackedList.length > 0) {
+    var trackedPaths = trackedList.map(function(t) { return t.path; });
+    var curMetrics = getTrackedPageMetrics(propertyId, trackedPaths, formatDate(lastMonday), formatDate(lastSunday));
+    var prevMetrics = getTrackedPageMetrics(propertyId, trackedPaths, formatDate(prevMonday), formatDate(prevSunday));
+    var trackedTrend = getPageTrends(propertyId, trackedPaths, formatDate(trendStart), formatDate(lastSunday));
+
+    trackedPages = trackedList.map(function(t) {
+      var cur = curMetrics[t.path] || { views: 0, bounceRate: 0, avgEngagementTime: 0, scrollRate: 0 };
+      var prev = prevMetrics[t.path] || { views: 0, bounceRate: 0, avgEngagementTime: 0, scrollRate: 0 };
+      var tm = trackedTrend[t.path] || {};
+      return {
+        path: t.path,
+        label: t.label || '',
+        url: buildPageUrl(customer.siteUrl || '', t.path),
+        views: cur.views,
+        prevViews: prev.views,
+        bounceRate: cur.bounceRate,
+        prevBounceRate: prev.bounceRate,
+        avgEngagementTime: cur.avgEngagementTime,
+        prevAvgEngagementTime: prev.avgEngagementTime,
+        scrollRate: cur.scrollRate,
+        prevScrollRate: prev.scrollRate,
+        trend: weekKeys.map(function(k) { return tm[k] || 0; })
+      };
+    });
+  }
+
   return {
     weekStart: formatDate(lastMonday),
     weekEnd: formatDate(lastSunday),
@@ -156,7 +186,8 @@ function fetchGA4Data(propertyId, customer) {
     topPages: topPages,
     topKeywords: getTopKeywords(customer.siteUrl || '', formatDate(lastMonday), formatDate(lastSunday)),
     trafficSources: trafficSources,
-    prevTrafficSources: prevTrafficSources
+    prevTrafficSources: prevTrafficSources,
+    trackedPages: trackedPages
   };
 }
 
@@ -196,7 +227,7 @@ function runGA4Report(propertyId, startDate, endDate) {
     sessions: parseInt(values[0].value) || 0,
     pageviews: parseInt(values[1].value) || 0,
     usersCount: parseInt(values[2].value) || 0,
-    bounceRate: parseFloat(values[3].value) || 0,
+    bounceRate: (parseFloat(values[3].value) || 0) * 100, // GA4は0〜1の割合で返すため%に変換
     avgSessionDuration: parseFloat(values[4].value) || 0,
     newUsers: newUsers,
     returningUsers: Math.max(0, activeUsers - newUsers)
@@ -234,7 +265,8 @@ function pushToVPS(propertyId, report) {
     topPages: report.topPages,
     topKeywords: report.topKeywords,
     trafficSources: report.trafficSources,
-    prevTrafficSources: report.prevTrafficSources
+    prevTrafficSources: report.prevTrafficSources,
+    trackedPages: report.trackedPages
   };
 
   var options = {
@@ -385,6 +417,115 @@ function mondayOfDateStr(yyyymmdd) {
   var dow = dt.getDay();
   dt.setDate(dt.getDate() - (dow === 0 ? 6 : dow - 1));
   return formatDate(dt);
+}
+
+// ===== 登録ページ計測 =====
+
+/**
+ * VPSから登録ページ一覧を取得
+ * 返り値: [{ path, label }, ...]
+ */
+function getTrackedPathsFromVPS(propertyId) {
+  try {
+    var props = PropertiesService.getScriptProperties();
+    var apiUrl = props.getProperty('VPS_API_URL'); // .../api/reports/push
+    var apiKey = props.getProperty('VPS_API_KEY');
+    // push用URLからベースを組み立て
+    var base = apiUrl.replace(/\/api\/reports\/push\/?$/, '');
+    var url = base + '/api/tracked-pages/gas?propertyId=' + encodeURIComponent(propertyId);
+
+    var response = UrlFetchApp.fetch(url, {
+      method: 'get',
+      headers: { 'X-API-Key': apiKey },
+      muteHttpExceptions: true
+    });
+
+    if (response.getResponseCode() !== 200) return [];
+    var json = JSON.parse(response.getContentText());
+    return json.pages || [];
+  } catch (e) {
+    Logger.log('getTrackedPathsFromVPS error: ' + e.message);
+    return [];
+  }
+}
+
+/**
+ * 指定パス群の詳細指標を取得
+ * 返り値: { '/path': { views, bounceRate(%), avgEngagementTime(秒), scrollRate(%) }, ... }
+ */
+function getTrackedPageMetrics(propertyId, paths, startDate, endDate) {
+  var result = {};
+  if (!paths || paths.length === 0) return result;
+
+  try {
+    // 主要指標
+    var report = AnalyticsData.Properties.runReport({
+      dateRanges: [{ startDate: startDate, endDate: endDate }],
+      dimensions: [{ name: 'pagePath' }],
+      metrics: [
+        { name: 'screenPageViews' },
+        { name: 'bounceRate' },
+        { name: 'userEngagementDuration' },
+        { name: 'activeUsers' }
+      ],
+      dimensionFilter: {
+        filter: { fieldName: 'pagePath', inListFilter: { values: paths } }
+      },
+      limit: 100
+    }, 'properties/' + propertyId);
+
+    if (report.rows) {
+      report.rows.forEach(function(row) {
+        var path = row.dimensionValues[0].value;
+        var v = row.metricValues;
+        var views = parseInt(v[0].value) || 0;
+        var bounce = (parseFloat(v[1].value) || 0) * 100;
+        var engDur = parseFloat(v[2].value) || 0;
+        var activeUsers = parseInt(v[3].value) || 0;
+        result[path] = {
+          views: views,
+          bounceRate: bounce,
+          avgEngagementTime: activeUsers > 0 ? engDur / activeUsers : 0,
+          scrollRate: 0
+        };
+      });
+    }
+
+    // スクロール率（scrollイベント数 ÷ PV）
+    try {
+      var scrollReport = AnalyticsData.Properties.runReport({
+        dateRanges: [{ startDate: startDate, endDate: endDate }],
+        dimensions: [{ name: 'pagePath' }],
+        metrics: [{ name: 'eventCount' }],
+        dimensionFilter: {
+          andGroup: {
+            expressions: [
+              { filter: { fieldName: 'pagePath', inListFilter: { values: paths } } },
+              { filter: { fieldName: 'eventName', stringFilter: { matchType: 'EXACT', value: 'scroll' } } }
+            ]
+          }
+        },
+        limit: 100
+      }, 'properties/' + propertyId);
+
+      if (scrollReport.rows) {
+        scrollReport.rows.forEach(function(row) {
+          var path = row.dimensionValues[0].value;
+          var scrolls = parseInt(row.metricValues[0].value) || 0;
+          if (result[path] && result[path].views > 0) {
+            result[path].scrollRate = Math.min(100, (scrolls / result[path].views) * 100);
+          }
+        });
+      }
+    } catch (e2) {
+      Logger.log('scroll metric error: ' + e2.message);
+    }
+
+    return result;
+  } catch (e) {
+    Logger.log('getTrackedPageMetrics error: ' + e.message);
+    return result;
+  }
 }
 
 // ===== 人気キーワード取得（Search Console） =====
