@@ -62,16 +62,16 @@ export default async function CustomerReportPage({
       <Header companyName={session.companyName} role={session.role} />
 
       <main className="max-w-6xl mx-auto px-6 py-8">
-        <div className="mb-6">
+        <div className="mb-6 print:hidden">
           <a href="/admin/reports" className="text-sm text-blue-600 hover:text-blue-800">
             ← 全顧客レポートに戻る
           </a>
         </div>
 
-        <h2 className="text-xl font-bold text-gray-800 mb-2">
+        <h2 className="text-xl font-bold text-gray-800 mb-2 print:hidden">
           {customer.company_name}
         </h2>
-        <p className="text-sm text-gray-500 mb-6">
+        <p className="text-sm text-gray-500 mb-6 print:hidden">
           GA4 プロパティID: {customer.ga4_property_id}
         </p>
 

@@ -105,21 +105,39 @@ export default function ReportDetail({
 
   return (
     <>
-      {/* 期間切替ボタン */}
-      <div className="flex gap-2 mb-6">
-        {(["1w", "1m", "3m"] as Period[]).map((p) => (
-          <button
-            key={p}
-            onClick={() => setPeriod(p)}
-            className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-              period === p
-                ? "bg-blue-600 text-white"
-                : "bg-white border border-gray-300 text-gray-700 hover:bg-gray-50"
-            }`}
-          >
-            {periodLabels[p]}
-          </button>
-        ))}
+      {/* 期間切替ボタン + PDF出力 */}
+      <div className="flex items-center justify-between gap-2 mb-6 print:hidden">
+        <div className="flex gap-2">
+          {(["1w", "1m", "3m"] as Period[]).map((p) => (
+            <button
+              key={p}
+              onClick={() => setPeriod(p)}
+              className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+                period === p
+                  ? "bg-blue-600 text-white"
+                  : "bg-white border border-gray-300 text-gray-700 hover:bg-gray-50"
+              }`}
+            >
+              {periodLabels[p]}
+            </button>
+          ))}
+        </div>
+        <button
+          onClick={() => window.print()}
+          className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 text-sm font-medium transition-colors"
+        >
+          PDF保存 / 印刷
+        </button>
+      </div>
+
+      {/* 印刷時のみ表示されるタイトル */}
+      <div className="hidden print:block mb-4">
+        <h2 className="text-xl font-bold text-gray-900">{companyName}</h2>
+        <p className="text-sm text-gray-600">
+          {periodLabels[period]}レポート
+          {filteredReports.length > 0 &&
+            `（${filteredReports[filteredReports.length - 1].week_start} 〜 ${filteredReports[0].week_end}）`}
+        </p>
       </div>
 
       {!latest ? (
