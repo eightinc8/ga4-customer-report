@@ -118,6 +118,24 @@ function fetchGA4Data(propertyId, customer) {
   var trafficSources = getTrafficSources(propertyId, formatDate(lastMonday), formatDate(lastSunday));
   var prevTrafficSources = getTrafficSources(propertyId, formatDate(prevMonday), formatDate(prevSunday));
 
+  // 人気ページTOP20（前週PV・URL付き）+ PV推移（過去8週）
+  var topPages = getTopPages(propertyId, formatDate(lastMonday), formatDate(lastSunday),
+                             formatDate(prevMonday), formatDate(prevSunday), customer.siteUrl || '');
+  var trendStart = new Date(lastMonday);
+  trendStart.setDate(lastMonday.getDate() - 49); // 8週前の月曜
+  var weekKeys = [];
+  for (var w = 0; w < 8; w++) {
+    var wk = new Date(trendStart);
+    wk.setDate(trendStart.getDate() + w * 7);
+    weekKeys.push(formatDate(wk));
+  }
+  var trendMap = getPageTrends(propertyId, topPages.map(function(p) { return p.path; }),
+                               formatDate(trendStart), formatDate(lastSunday));
+  topPages.forEach(function(p) {
+    var m = trendMap[p.path] || {};
+    p.trend = weekKeys.map(function(k) { return m[k] || 0; });
+  });
+
   return {
     weekStart: formatDate(lastMonday),
     weekEnd: formatDate(lastSunday),
@@ -135,7 +153,7 @@ function fetchGA4Data(propertyId, customer) {
     prevAvgSessionDuration: previousData.avgSessionDuration,
     prevNewUsers: previousData.newUsers,
     prevReturningUsers: previousData.returningUsers,
-    topPages: getTopPages(propertyId, formatDate(lastMonday), formatDate(lastSunday), formatDate(prevMonday), formatDate(prevSunday)),
+    topPages: topPages,
     topKeywords: getTopKeywords(customer.siteUrl || '', formatDate(lastMonday), formatDate(lastSunday)),
     trafficSources: trafficSources,
     prevTrafficSources: prevTrafficSources
@@ -240,9 +258,9 @@ function pushToVPS(propertyId, report) {
 // ===== 人気ページ取得 =====
 
 /**
- * GA4から人気ページTOP10を取得（前週PVも付与）
+ * GA4から人気ページTOP20を取得（前週PV・記事URLも付与）
  */
-function getTopPages(propertyId, startDate, endDate, prevStartDate, prevEndDate) {
+function getTopPages(propertyId, startDate, endDate, prevStartDate, prevEndDate, siteUrl) {
   try {
     var request = AnalyticsData.Properties.runReport({
       dateRanges: [{ startDate: startDate, endDate: endDate }],
@@ -254,17 +272,20 @@ function getTopPages(propertyId, startDate, endDate, prevStartDate, prevEndDate)
         { name: 'screenPageViews' }
       ],
       orderBys: [{ metric: { metricName: 'screenPageViews' }, desc: true }],
-      limit: 10
+      limit: 20
     }, 'properties/' + propertyId);
 
     if (!request.rows || request.rows.length === 0) return [];
 
     var pages = request.rows.map(function(row) {
+      var path = row.dimensionValues[1].value;
       return {
         title: row.dimensionValues[0].value,
-        path: row.dimensionValues[1].value,
+        path: path,
+        url: buildPageUrl(siteUrl, path),
         views: parseInt(row.metricValues[0].value) || 0,
-        prevViews: 0
+        prevViews: 0,
+        trend: []
       };
     });
 
@@ -304,6 +325,66 @@ function getTopPages(propertyId, startDate, endDate, prevStartDate, prevEndDate)
     Logger.log('getTopPages error: ' + e.message);
     return [];
   }
+}
+
+/**
+ * サイトURLとページパスから記事の完全URLを生成
+ */
+function buildPageUrl(siteUrl, path) {
+  if (!siteUrl) return '';
+  var base = String(siteUrl).replace(/\/+$/, '');
+  if (!path) return base;
+  var p = String(path);
+  if (p.charAt(0) !== '/') p = '/' + p;
+  return base + p;
+}
+
+/**
+ * 指定パス群の週次PV推移を取得（過去8週分）
+ * 返り値: { '/path': { 'YYYY-MM-DD(週の月曜)': PV, ... }, ... }
+ */
+function getPageTrends(propertyId, paths, startDate, endDate) {
+  if (!paths || paths.length === 0) return {};
+  try {
+    var report = AnalyticsData.Properties.runReport({
+      dateRanges: [{ startDate: startDate, endDate: endDate }],
+      dimensions: [{ name: 'pagePath' }, { name: 'date' }],
+      metrics: [{ name: 'screenPageViews' }],
+      dimensionFilter: {
+        filter: { fieldName: 'pagePath', inListFilter: { values: paths } }
+      },
+      limit: 10000
+    }, 'properties/' + propertyId);
+
+    var map = {};
+    if (report.rows) {
+      report.rows.forEach(function(row) {
+        var path = row.dimensionValues[0].value;
+        var dateStr = row.dimensionValues[1].value; // YYYYMMDD
+        var v = parseInt(row.metricValues[0].value) || 0;
+        var weekKey = mondayOfDateStr(dateStr);
+        if (!map[path]) map[path] = {};
+        map[path][weekKey] = (map[path][weekKey] || 0) + v;
+      });
+    }
+    return map;
+  } catch (e) {
+    Logger.log('getPageTrends error: ' + e.message);
+    return {};
+  }
+}
+
+/**
+ * YYYYMMDD文字列 → その週の月曜日(YYYY-MM-DD)
+ */
+function mondayOfDateStr(yyyymmdd) {
+  var y = parseInt(yyyymmdd.substring(0, 4), 10);
+  var m = parseInt(yyyymmdd.substring(4, 6), 10) - 1;
+  var d = parseInt(yyyymmdd.substring(6, 8), 10);
+  var dt = new Date(y, m, d);
+  var dow = dt.getDay();
+  dt.setDate(dt.getDate() - (dow === 0 ? 6 : dow - 1));
+  return formatDate(dt);
 }
 
 // ===== 人気キーワード取得（Search Console） =====

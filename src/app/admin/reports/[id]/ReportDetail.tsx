@@ -6,8 +6,30 @@ import ReportCard from "@/components/ReportCard";
 interface PageItem {
   title: string;
   path: string;
+  url?: string;
   views: number;
   prevViews?: number;
+  trend?: number[];
+}
+
+// PV推移ミニグラフ（過去8週）
+function Sparkline({ data }: { data: number[] }) {
+  if (!data || data.length < 2) return <span className="text-gray-300 text-xs">-</span>;
+  const w = 90;
+  const h = 24;
+  const max = Math.max(...data, 1);
+  const step = w / (data.length - 1);
+  const points = data.map((v, i) => `${(i * step).toFixed(1)},${(h - (v / max) * (h - 2) - 1).toFixed(1)}`);
+  const last = data[data.length - 1];
+  const prev = data[data.length - 2];
+  const color = last >= prev ? "#16a34a" : "#dc2626";
+  const [lx, ly] = points[points.length - 1].split(",");
+  return (
+    <svg width={w} height={h} className="inline-block align-middle" aria-label="PV推移">
+      <polyline points={points.join(" ")} fill="none" stroke={color} strokeWidth="1.5" strokeLinejoin="round" />
+      <circle cx={lx} cy={ly} r="2" fill={color} />
+    </svg>
+  );
 }
 
 interface KeywordItem {
@@ -218,7 +240,7 @@ export default function ReportDetail({
             if (pages.length === 0) return null;
             return (
               <div className="mt-6">
-                <h4 className="text-sm font-medium text-gray-700 mb-3">人気ページ TOP10</h4>
+                <h4 className="text-sm font-medium text-gray-700 mb-3">人気ページ TOP20</h4>
                 <div className="bg-gray-50 rounded-lg overflow-hidden">
                   <table className="w-full text-sm">
                     <thead>
@@ -227,6 +249,7 @@ export default function ReportDetail({
                         <th className="text-left px-4 py-2 text-gray-500 font-medium">ページタイトル</th>
                         <th className="text-right px-4 py-2 text-gray-500 font-medium">PV</th>
                         <th className="text-right px-4 py-2 text-gray-500 font-medium">前週比</th>
+                        <th className="text-center px-4 py-2 text-gray-500 font-medium">推移（8週）</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -237,7 +260,13 @@ export default function ReportDetail({
                         <tr key={i} className="border-b border-gray-100">
                           <td className="px-4 py-2 text-gray-400">{i + 1}</td>
                           <td className="px-4 py-2">
-                            <p className="text-gray-800 truncate max-w-md">{p.title}</p>
+                            {p.url ? (
+                              <a href={p.url} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline truncate max-w-md block">
+                                {p.title}
+                              </a>
+                            ) : (
+                              <p className="text-gray-800 truncate max-w-md">{p.title}</p>
+                            )}
                             <p className="text-xs text-gray-400 truncate max-w-md">{p.path}</p>
                           </td>
                           <td className="text-right px-4 py-2 text-gray-700 font-medium">{p.views.toLocaleString()}</td>
@@ -250,12 +279,16 @@ export default function ReportDetail({
                               </span>
                             )}
                           </td>
+                          <td className="text-center px-4 py-2" title={(p.trend || []).join(" → ")}>
+                            <Sparkline data={p.trend || []} />
+                          </td>
                         </tr>
                         );
                       })}
                     </tbody>
                   </table>
                 </div>
+                <p className="text-xs text-gray-400 mt-2">※ 推移は過去8週間の週次PV。タイトルをクリックすると記事が開きます（サイトURL設定時）。</p>
               </div>
             );
           })()}
