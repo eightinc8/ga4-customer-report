@@ -12,24 +12,40 @@ interface PageItem {
   trend?: number[];
 }
 
-// PV推移ミニグラフ（過去8週）
-function Sparkline({ data }: { data: number[] }) {
+// 推移ミニグラフ
+function Sparkline({ data, color, width = 90 }: { data: number[]; color?: string; width?: number }) {
   if (!data || data.length < 2) return <span className="text-gray-300 text-xs">-</span>;
-  const w = 90;
+  const w = width;
   const h = 24;
   const max = Math.max(...data, 1);
   const step = w / (data.length - 1);
   const points = data.map((v, i) => `${(i * step).toFixed(1)},${(h - (v / max) * (h - 2) - 1).toFixed(1)}`);
   const last = data[data.length - 1];
   const prev = data[data.length - 2];
-  const color = last >= prev ? "#16a34a" : "#dc2626";
+  const lineColor = color ?? (last >= prev ? "#16a34a" : "#dc2626");
   const [lx, ly] = points[points.length - 1].split(",");
   return (
-    <svg width={w} height={h} className="inline-block align-middle" aria-label="PV推移">
-      <polyline points={points.join(" ")} fill="none" stroke={color} strokeWidth="1.5" strokeLinejoin="round" />
-      <circle cx={lx} cy={ly} r="2" fill={color} />
+    <svg width={w} height={h} className="inline-block align-middle" aria-label="推移">
+      <polyline points={points.join(" ")} fill="none" stroke={lineColor} strokeWidth="1.5" strokeLinejoin="round" />
+      <circle cx={lx} cy={ly} r="2" fill={lineColor} />
     </svg>
   );
+}
+
+const CHANNEL_DEFS = [
+  { key: "direct", label: "直接流入", dot: "bg-blue-500", stroke: "#3b82f6" },
+  { key: "organic_search", label: "自然検索", dot: "bg-green-500", stroke: "#22c55e" },
+  { key: "ai_search", label: "AI検索", dot: "bg-purple-500", stroke: "#a855f7" },
+  { key: "social", label: "SNS流入", dot: "bg-pink-500", stroke: "#ec4899" },
+  { key: "other", label: "その他", dot: "bg-gray-400", stroke: "#9ca3af" },
+] as const;
+
+function parseTraffic(json: string): Record<string, number> {
+  try {
+    return JSON.parse(json || "{}");
+  } catch {
+    return {};
+  }
 }
 
 interface KeywordItem {
@@ -453,6 +469,58 @@ export default function ReportDetail({
               </div>
             </div>
           )}
+
+          {/* 流入元別セッションの推移 */}
+          {(() => {
+            // 古い→新しい順に並べ替え
+            const chrono = [...filteredReports].reverse();
+            const channels = CHANNEL_DEFS.map((c) => {
+              const weekly = chrono.map((r) => parseTraffic(r.traffic_sources)[c.key] || 0);
+              const total = weekly.reduce((s, v) => s + v, 0);
+              const first = weekly[0] || 0;
+              const last = weekly[weekly.length - 1] || 0;
+              const change = first === 0 ? null : ((last - first) / first) * 100;
+              return { ...c, weekly, total, change };
+            });
+            const grandTotal = channels.reduce((s, c) => s + c.total, 0);
+            if (grandTotal === 0) return null;
+
+            return (
+              <div className="bg-white rounded-lg border border-gray-200 p-6 mb-6">
+                <h3 className="text-sm font-medium text-gray-700 mb-1">流入元別セッションの推移</h3>
+                <p className="text-xs text-gray-400 mb-4">期間内（古い週→新しい週）で、どの流入元が伸びている/減っているかを確認できます。</p>
+
+                {/* 期間合計の構成バー */}
+                <div className="flex h-4 rounded-full overflow-hidden mb-4">
+                  {channels.filter((c) => c.total > 0).map((c) => (
+                    <div key={c.key} className={c.dot} style={{ width: `${(c.total / grandTotal) * 100}%` }} title={`${c.label}: ${c.total.toLocaleString()}`} />
+                  ))}
+                </div>
+
+                {/* チャネル別カード */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+                  {channels.map((c) => {
+                    const pct = grandTotal > 0 ? ((c.total / grandTotal) * 100).toFixed(1) : "0";
+                    return (
+                      <div key={c.key} className="bg-gray-50 rounded-lg p-3">
+                        <div className="flex items-center gap-1.5 mb-1">
+                          <span className={`w-2.5 h-2.5 rounded-full ${c.dot}`} />
+                          <span className="text-xs text-gray-500">{c.label}</span>
+                        </div>
+                        <p className="text-lg font-bold text-gray-900">{c.total.toLocaleString()}</p>
+                        <p className="text-xs text-gray-400 mb-1">{pct}%</p>
+                        <Sparkline data={c.weekly} color={c.stroke} width={110} />
+                        <p className={`text-xs mt-1 ${c.change === null ? "text-gray-400" : c.change >= 0 ? "text-green-600" : "text-red-600"}`}>
+                          {c.change === null ? "期間内 -" : `期間内 ${c.change > 0 ? "+" : ""}${c.change.toFixed(1)}%`}
+                        </p>
+                      </div>
+                    );
+                  })}
+                </div>
+                <p className="text-xs text-gray-400 mt-2">※「期間内」は最初の週と最新の週の比較です。</p>
+              </div>
+            );
+          })()}
 
           <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
             <table className="w-full text-sm">
