@@ -559,6 +559,66 @@ export default function ReportDetail({
               </tbody>
             </table>
           </div>
+
+          {/* 人気ページ TOP20（期間合計） */}
+          {(() => {
+            const chrono = [...filteredReports].reverse();
+            const map: Record<string, { title: string; url?: string; path: string; total: number; weekly: number[] }> = {};
+            chrono.forEach((r, wi) => {
+              let pages: PageItem[] = [];
+              try { pages = JSON.parse(r.top_pages || "[]"); } catch { pages = []; }
+              pages.forEach((p) => {
+                if (!map[p.path]) {
+                  map[p.path] = { title: p.title, url: p.url, path: p.path, total: 0, weekly: new Array(chrono.length).fill(0) };
+                }
+                map[p.path].total += p.views || 0;
+                map[p.path].weekly[wi] = p.views || 0;
+                map[p.path].title = p.title;
+                if (p.url) map[p.path].url = p.url;
+              });
+            });
+            const list = Object.values(map).sort((a, b) => b.total - a.total).slice(0, 20);
+            if (list.length === 0) return null;
+            return (
+              <div className="bg-white rounded-lg border border-gray-200 p-6 mt-6">
+                <h3 className="text-sm font-medium text-gray-700 mb-3">人気ページ TOP20（{periodLabels[period]}合計）</h3>
+                <div className="bg-gray-50 rounded-lg overflow-hidden">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-gray-200">
+                        <th className="text-left px-4 py-2 text-gray-500 font-medium w-8">#</th>
+                        <th className="text-left px-4 py-2 text-gray-500 font-medium">ページタイトル</th>
+                        <th className="text-right px-4 py-2 text-gray-500 font-medium">合計PV</th>
+                        <th className="text-center px-4 py-2 text-gray-500 font-medium">推移</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {list.map((p, i) => (
+                        <tr key={i} className="border-b border-gray-100">
+                          <td className="px-4 py-2 text-gray-400">{i + 1}</td>
+                          <td className="px-4 py-2">
+                            {p.url ? (
+                              <a href={p.url} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline truncate max-w-md block">
+                                {p.title}
+                              </a>
+                            ) : (
+                              <p className="text-gray-800 truncate max-w-md">{p.title}</p>
+                            )}
+                            <p className="text-xs text-gray-400 truncate max-w-md">{p.path}</p>
+                          </td>
+                          <td className="text-right px-4 py-2 text-gray-700 font-medium">{p.total.toLocaleString()}</td>
+                          <td className="text-center px-4 py-2" title={p.weekly.join(" → ")}>
+                            <Sparkline data={p.weekly} />
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                <p className="text-xs text-gray-400 mt-2">※ 各週のTOP20を合算した集計です（週によりランク外だったページは0として扱います）。</p>
+              </div>
+            );
+          })()}
         </>
       )}
     </>
