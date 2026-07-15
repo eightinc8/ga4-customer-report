@@ -166,6 +166,17 @@ function fetchGA4Data(propertyId, customer) {
     });
   }
 
+  // ゴールデン経路（ファネル）
+  var funnelData = [];
+  var funnelSteps = getFunnelFromVPS(propertyId);
+  if (funnelSteps.length > 0) {
+    var curCounts = getFunnelMetrics(propertyId, funnelSteps, formatDate(lastMonday), formatDate(lastSunday));
+    var prevCounts = getFunnelMetrics(propertyId, funnelSteps, formatDate(prevMonday), formatDate(prevSunday));
+    funnelData = funnelSteps.map(function(s, i) {
+      return { label: s.label, type: s.step_type, value: s.step_value, users: curCounts[i], prevUsers: prevCounts[i] };
+    });
+  }
+
   return {
     weekStart: formatDate(lastMonday),
     weekEnd: formatDate(lastSunday),
@@ -187,7 +198,8 @@ function fetchGA4Data(propertyId, customer) {
     topKeywords: getTopKeywords(customer.siteUrl || '', formatDate(lastMonday), formatDate(lastSunday)),
     trafficSources: trafficSources,
     prevTrafficSources: prevTrafficSources,
-    trackedPages: trackedPages
+    trackedPages: trackedPages,
+    funnelData: funnelData
   };
 }
 
@@ -266,7 +278,8 @@ function pushToVPS(propertyId, report) {
     topKeywords: report.topKeywords,
     trafficSources: report.trafficSources,
     prevTrafficSources: report.prevTrafficSources,
-    trackedPages: report.trackedPages
+    trackedPages: report.trackedPages,
+    funnelData: report.funnelData
   };
 
   var options = {
@@ -525,6 +538,85 @@ function getTrackedPageMetrics(propertyId, paths, startDate, endDate) {
   } catch (e) {
     Logger.log('getTrackedPageMetrics error: ' + e.message);
     return result;
+  }
+}
+
+// ===== ゴールデン経路（ファネル）計測 =====
+
+/**
+ * VPSからファネル段階を取得
+ * 返り値: [{ label, step_type, step_value }, ...]
+ */
+function getFunnelFromVPS(propertyId) {
+  try {
+    var props = PropertiesService.getScriptProperties();
+    var apiUrl = props.getProperty('VPS_API_URL');
+    var apiKey = props.getProperty('VPS_API_KEY');
+    var base = apiUrl.replace(/\/api\/reports\/push\/?$/, '');
+    var url = base + '/api/funnel/gas?propertyId=' + encodeURIComponent(propertyId);
+    var response = UrlFetchApp.fetch(url, {
+      method: 'get',
+      headers: { 'X-API-Key': apiKey },
+      muteHttpExceptions: true
+    });
+    if (response.getResponseCode() !== 200) return [];
+    var json = JSON.parse(response.getContentText());
+    return json.steps || [];
+  } catch (e) {
+    Logger.log('getFunnelFromVPS error: ' + e.message);
+    return [];
+  }
+}
+
+/**
+ * 各段階の到達ユーザー数を取得（段階の順に配列で返す）
+ */
+function getFunnelMetrics(propertyId, steps, startDate, endDate) {
+  var counts = steps.map(function () { return 0; });
+  if (!steps || steps.length === 0) return counts;
+
+  try {
+    var paths = [];
+    var events = [];
+    steps.forEach(function (s) {
+      if (s.step_type === 'event') events.push(s.step_value);
+      else paths.push(s.step_value);
+    });
+
+    var pageMap = {};
+    if (paths.length > 0) {
+      var pr = AnalyticsData.Properties.runReport({
+        dateRanges: [{ startDate: startDate, endDate: endDate }],
+        dimensions: [{ name: 'pagePath' }],
+        metrics: [{ name: 'activeUsers' }],
+        dimensionFilter: { filter: { fieldName: 'pagePath', inListFilter: { values: paths } } },
+        limit: 200
+      }, 'properties/' + propertyId);
+      if (pr.rows) pr.rows.forEach(function (row) {
+        pageMap[row.dimensionValues[0].value] = parseInt(row.metricValues[0].value) || 0;
+      });
+    }
+
+    var eventMap = {};
+    if (events.length > 0) {
+      var er = AnalyticsData.Properties.runReport({
+        dateRanges: [{ startDate: startDate, endDate: endDate }],
+        dimensions: [{ name: 'eventName' }],
+        metrics: [{ name: 'activeUsers' }],
+        dimensionFilter: { filter: { fieldName: 'eventName', inListFilter: { values: events } } },
+        limit: 200
+      }, 'properties/' + propertyId);
+      if (er.rows) er.rows.forEach(function (row) {
+        eventMap[row.dimensionValues[0].value] = parseInt(row.metricValues[0].value) || 0;
+      });
+    }
+
+    return steps.map(function (s) {
+      return s.step_type === 'event' ? (eventMap[s.step_value] || 0) : (pageMap[s.step_value] || 0);
+    });
+  } catch (e) {
+    Logger.log('getFunnelMetrics error: ' + e.message);
+    return counts;
   }
 }
 

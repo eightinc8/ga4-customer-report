@@ -24,8 +24,8 @@ export async function POST(request: NextRequest) {
        (user_id, week_start, week_end, sessions, pageviews, users_count, bounce_rate, avg_session_duration,
         prev_sessions, prev_pageviews, prev_users_count, prev_bounce_rate, prev_avg_session_duration,
         new_users, returning_users, prev_new_users, prev_returning_users, top_pages, top_keywords,
-        traffic_sources, prev_traffic_sources, tracked_pages)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+        traffic_sources, prev_traffic_sources, tracked_pages, funnel_data)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     ).run(
       user.id,
       data.weekStart,
@@ -48,7 +48,8 @@ export async function POST(request: NextRequest) {
       JSON.stringify(data.topKeywords || []),
       JSON.stringify(data.trafficSources || {}),
       JSON.stringify(data.prevTrafficSources || {}),
-      JSON.stringify(data.trackedPages || [])
+      JSON.stringify(data.trackedPages || []),
+      JSON.stringify(data.funnelData || [])
     );
 
     return NextResponse.json({ success: true });

@@ -4,7 +4,7 @@ import { jwtVerify } from "jose";
 const SECRET = new TextEncoder().encode(
   process.env.JWT_SECRET || "change-this-secret-in-production-immediately"
 );
-const PUBLIC_PATHS = ["/login", "/api/auth/login", "/api/reports/push", "/api/tracked-pages/gas"];
+const PUBLIC_PATHS = ["/login", "/api/auth/login", "/api/reports/push", "/api/tracked-pages/gas", "/api/funnel/gas"];
 
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;

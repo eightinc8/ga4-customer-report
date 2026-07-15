@@ -75,6 +75,16 @@ function initSchema(db: Database.Database) {
       created_at TEXT NOT NULL DEFAULT (datetime('now')),
       UNIQUE(user_id, path)
     );
+
+    CREATE TABLE IF NOT EXISTS funnel_steps (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER NOT NULL REFERENCES users(id),
+      step_order INTEGER NOT NULL DEFAULT 0,
+      label TEXT NOT NULL,
+      step_type TEXT NOT NULL DEFAULT 'page',
+      step_value TEXT NOT NULL,
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
   `);
 
   // マイグレーション
@@ -88,6 +98,7 @@ function initSchema(db: Database.Database) {
     "ALTER TABLE reports ADD COLUMN traffic_sources TEXT DEFAULT '{}'",
     "ALTER TABLE reports ADD COLUMN prev_traffic_sources TEXT DEFAULT '{}'",
     "ALTER TABLE reports ADD COLUMN tracked_pages TEXT DEFAULT '[]'",
+    "ALTER TABLE reports ADD COLUMN funnel_data TEXT DEFAULT '[]'",
   ];
   for (const sql of migrations) {
     try { db.exec(sql); } catch { /* カラムが既に存在する場合はスキップ */ }

@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import Header from "@/components/Header";
 import ReportDetail from "./ReportDetail";
 import TrackedPagesManager from "./TrackedPagesManager";
+import FunnelManager from "./FunnelManager";
 
 interface User {
   id: number;
@@ -35,6 +36,7 @@ interface Report {
   traffic_sources: string;
   prev_traffic_sources: string;
   tracked_pages: string;
+  funnel_data: string;
 }
 
 export default async function CustomerReportPage({
@@ -76,6 +78,8 @@ export default async function CustomerReportPage({
         <p className="text-sm text-gray-500 mb-6 print:hidden">
           GA4 プロパティID: {customer.ga4_property_id}
         </p>
+
+        <FunnelManager userId={customer.id} />
 
         <TrackedPagesManager userId={customer.id} />
 

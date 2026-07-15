@@ -135,6 +135,15 @@ interface Report {
   traffic_sources: string;
   prev_traffic_sources: string;
   tracked_pages: string;
+  funnel_data: string;
+}
+
+interface FunnelItem {
+  label: string;
+  type: string;
+  value: string;
+  users: number;
+  prevUsers?: number;
 }
 
 type Period = "1w" | "1m" | "3m";
@@ -251,6 +260,62 @@ export default function ReportDetail({
             <ReportCard label="直帰率" current={latest.bounce_rate} previous={latest.prev_bounce_rate} isPercentage invertColor />
             <ReportCard label="平均セッション時間" current={Math.round(latest.avg_session_duration)} previous={Math.round(latest.prev_avg_session_duration)} unit="秒" />
           </div>
+
+          {/* ゴールデン経路（ファネル） */}
+          {(() => {
+            const funnel: FunnelItem[] = (() => { try { return JSON.parse(latest.funnel_data || "[]"); } catch { return []; } })();
+            if (funnel.length < 2) return null;
+            const firstUsers = funnel[0].users || 0;
+            return (
+              <div className="mt-6">
+                <h4 className="text-sm font-medium text-gray-700 mb-1">ゴールデン経路（ファネル）</h4>
+                <p className="text-xs text-gray-400 mb-3">入口から成約までの各段階の到達人数と通過率。数字が大きく落ちる段階が改善ポイントです。</p>
+                <div className="space-y-2">
+                  {funnel.map((step, i) => {
+                    const reachPct = firstUsers > 0 ? (step.users / firstUsers) * 100 : 0;
+                    const prevStep = i > 0 ? funnel[i - 1] : null;
+                    const stepConv = prevStep && prevStep.users > 0 ? (step.users / prevStep.users) * 100 : null;
+                    const wow = step.prevUsers && step.prevUsers > 0 ? ((step.users - step.prevUsers) / step.prevUsers) * 100 : null;
+                    return (
+                      <div key={i} className="bg-gray-50 rounded-lg p-3">
+                        <div className="flex items-center gap-2 mb-1.5">
+                          <span className="w-5 h-5 shrink-0 rounded-full bg-blue-600 text-white text-[10px] flex items-center justify-center">{i + 1}</span>
+                          <span className="text-sm text-gray-800 truncate">{step.label}</span>
+                          {step.type === "event" && <span className="text-[10px] px-1.5 py-0.5 rounded bg-purple-100 text-purple-700">CV</span>}
+                          <span className="ml-auto text-sm font-bold text-gray-900">{step.users.toLocaleString()}人</span>
+                        </div>
+                        <div className="flex h-3 rounded-full bg-gray-200 overflow-hidden">
+                          <div className={step.type === "event" ? "bg-purple-500" : "bg-blue-500"} style={{ width: `${Math.max(reachPct, 1)}%` }} />
+                        </div>
+                        <div className="flex items-center gap-3 mt-1 text-xs">
+                          <span className="text-gray-400">全体の {reachPct.toFixed(1)}%</span>
+                          {stepConv !== null && (
+                            <span className={stepConv >= 50 ? "text-green-600" : stepConv >= 20 ? "text-yellow-600" : "text-red-600"}>
+                              前段からの通過 {stepConv.toFixed(1)}%
+                            </span>
+                          )}
+                          {wow !== null && (
+                            <span className={`ml-auto ${step.users >= (step.prevUsers || 0) ? "text-green-600" : "text-red-600"}`}>
+                              前週比 {wow > 0 ? "+" : ""}{wow.toFixed(1)}%
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+                {firstUsers > 0 && (
+                  <p className="text-xs text-gray-500 mt-2">
+                    最終到達率（{funnel[0].label} → {funnel[funnel.length - 1].label}）:
+                    <span className="font-bold text-gray-800 ml-1">
+                      {((funnel[funnel.length - 1].users / firstUsers) * 100).toFixed(2)}%
+                    </span>
+                  </p>
+                )}
+                <p className="text-xs text-gray-400 mt-1">※ 各段階に「到達した人数」の比較です（順序通りの厳密なファネルではなく到達ベースの目安）。</p>
+              </div>
+            );
+          })()}
 
           {/* 流入元別セッション */}
           {(() => {
