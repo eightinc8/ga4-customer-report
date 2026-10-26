@@ -28,6 +28,13 @@ function weeklyReport() {
       const report = fetchGA4Data(customer.propertyId, customer);
       pushToVPS(customer.propertyId, report);
       logResult(customer.companyName, '成功', '');
+
+      // SEOページ分析（失敗しても週次レポートには影響させない）
+      try {
+        runSeoAnalysis(customer, report.weekStart, report.weekEnd);
+      } catch (se) {
+        logResult(customer.companyName, 'SEO分析失敗', se.message);
+      }
     } catch (e) {
       logResult(customer.companyName, '失敗', e.message);
       Logger.log('Error for ' + customer.companyName + ': ' + e.message);
@@ -724,6 +731,215 @@ function getTrafficSources(propertyId, startDate, endDate) {
     Logger.log('getTrafficSources error: ' + e.message);
     return { direct: 0, organic_search: 0, ai_search: 0, social: 0, other: 0 };
   }
+}
+
+// ===== SEOページ分析 =====
+
+var AI_SOURCE_PATTERNS = ['chatgpt.com', 'perplexity', 'you.com', 'claude.ai', 'copilot',
+                          'gemini.google', 'bard', 'phind', 'poe.com', 'ai-overview'];
+
+function isAiSource(source) {
+  var s = String(source || '').toLowerCase();
+  for (var i = 0; i < AI_SOURCE_PATTERNS.length; i++) {
+    if (s.indexOf(AI_SOURCE_PATTERNS[i]) !== -1) return true;
+  }
+  return false;
+}
+
+/**
+ * 上位ページのSEO分析データを集めてVPSへ送信（クロール・採点はVPS側で実行）
+ */
+function runSeoAnalysis(customer, weekStart, weekEnd) {
+  var propertyId = customer.propertyId;
+  var pages = getTopLandingPages(propertyId, weekStart, weekEnd, 50);
+  if (pages.length === 0) {
+    Logger.log('SEO: 自然検索の流入ページがありません (' + customer.companyName + ')');
+    return;
+  }
+  var aiMap = getAiSessionsByLanding(propertyId, weekStart, weekEnd);
+  var scMap = getSearchConsoleByPage(customer.siteUrl || '', weekStart, weekEnd);
+
+  var payload = {
+    propertyId: propertyId,
+    weekStart: weekStart,
+    weekEnd: weekEnd,
+    pages: pages.map(function (p) {
+      return {
+        path: p.path,
+        url: buildPageUrl(customer.siteUrl || '', p.path),
+        organicSessions: p.organicSessions,
+        aiSessions: aiMap[p.path] || 0,
+        sc: scMap[p.path] || null
+      };
+    })
+  };
+  pushSeoToVPS(payload);
+}
+
+/**
+ * 自然検索の流入が多いランディングページ TOP N
+ */
+function getTopLandingPages(propertyId, startDate, endDate, limit) {
+  try {
+    var report = AnalyticsData.Properties.runReport({
+      dateRanges: [{ startDate: startDate, endDate: endDate }],
+      dimensions: [{ name: 'landingPage' }],
+      metrics: [{ name: 'sessions' }],
+      dimensionFilter: {
+        filter: { fieldName: 'sessionDefaultChannelGroup', stringFilter: { matchType: 'EXACT', value: 'Organic Search' } }
+      },
+      orderBys: [{ metric: { metricName: 'sessions' }, desc: true }],
+      limit: limit || 50
+    }, 'properties/' + propertyId);
+
+    if (!report.rows) return [];
+    var out = [];
+    report.rows.forEach(function (row) {
+      var path = row.dimensionValues[0].value;
+      if (!path || path === '(not set)') return;
+      out.push({ path: path, organicSessions: parseInt(row.metricValues[0].value) || 0 });
+    });
+    return out;
+  } catch (e) {
+    Logger.log('getTopLandingPages error: ' + e.message);
+    return [];
+  }
+}
+
+/**
+ * ランディングページ別のAI検索セッション数
+ */
+function getAiSessionsByLanding(propertyId, startDate, endDate) {
+  var map = {};
+  try {
+    var report = AnalyticsData.Properties.runReport({
+      dateRanges: [{ startDate: startDate, endDate: endDate }],
+      dimensions: [{ name: 'landingPage' }, { name: 'sessionSource' }],
+      metrics: [{ name: 'sessions' }],
+      limit: 10000
+    }, 'properties/' + propertyId);
+    if (!report.rows) return map;
+    report.rows.forEach(function (row) {
+      if (!isAiSource(row.dimensionValues[1].value)) return;
+      var path = row.dimensionValues[0].value;
+      map[path] = (map[path] || 0) + (parseInt(row.metricValues[0].value) || 0);
+    });
+  } catch (e) {
+    Logger.log('getAiSessionsByLanding error: ' + e.message);
+  }
+  return map;
+}
+
+/**
+ * Search Console: ページ×クエリを取得し、ページごとに集計
+ * ※ appsscript.json の oauthScopes に webmasters.readonly が必要
+ * ※ GAS実行アカウントが各サイトのSearch Consoleに閲覧権限を持っていること
+ * 返り値: { '/path': { queries:[...], totalQueries, totalImp, totalClicks, avgPos, missed:[...] } }
+ */
+function getSearchConsoleByPage(siteUrl, startDate, endDate) {
+  var result = {};
+  if (!siteUrl) return result;
+
+  var token = ScriptApp.getOAuthToken();
+  var host = String(siteUrl).replace(/^https?:\/\//, '').replace(/\/.*$/, '');
+  var base = String(siteUrl).replace(/\/+$/, '') + '/';
+  var candidates = [base, 'sc-domain:' + host];
+
+  var rows = null;
+  for (var c = 0; c < candidates.length && !rows; c++) {
+    try {
+      var res = UrlFetchApp.fetch(
+        'https://www.googleapis.com/webmasters/v3/sites/' + encodeURIComponent(candidates[c]) + '/searchAnalytics/query',
+        {
+          method: 'post',
+          contentType: 'application/json',
+          headers: { Authorization: 'Bearer ' + token },
+          payload: JSON.stringify({ startDate: startDate, endDate: endDate, dimensions: ['page', 'query'], rowLimit: 5000 }),
+          muteHttpExceptions: true
+        }
+      );
+      var code = res.getResponseCode();
+      if (code === 200) {
+        rows = JSON.parse(res.getContentText()).rows || [];
+      } else {
+        Logger.log('SearchConsole ' + candidates[c] + ': HTTP ' + code + ' ' + res.getContentText().slice(0, 200));
+      }
+    } catch (e) {
+      Logger.log('SearchConsole error: ' + e.message);
+    }
+  }
+  if (!rows) return result;
+
+  // ページごとに集計
+  var byPage = {};
+  rows.forEach(function (r) {
+    var pageUrl = r.keys[0];
+    var path = String(pageUrl).replace(/^https?:\/\/[^\/]+/, '').replace(/[?#].*$/, '') || '/';
+    if (!byPage[path]) byPage[path] = [];
+    byPage[path].push({
+      q: r.keys[1],
+      clicks: r.clicks || 0,
+      imp: r.impressions || 0,
+      ctr: Math.round((r.ctr || 0) * 1000) / 10,
+      pos: Math.round((r.position || 0) * 10) / 10
+    });
+  });
+
+  Object.keys(byPage).forEach(function (path) {
+    var qs = byPage[path].sort(function (a, b) { return b.imp - a.imp; });
+    var totalImp = 0, totalClicks = 0, posWeighted = 0;
+    qs.forEach(function (q) { totalImp += q.imp; totalClicks += q.clicks; posWeighted += q.pos * q.imp; });
+    var missed = qs.filter(function (q) { return q.imp >= 10 && q.pos >= 4 && q.pos <= 20 && q.ctr < 2; }).slice(0, 8);
+    result[path] = {
+      queries: qs.slice(0, 10),
+      totalQueries: qs.length,
+      totalImp: totalImp,
+      totalClicks: totalClicks,
+      avgPos: totalImp > 0 ? Math.round((posWeighted / totalImp) * 10) / 10 : 0,
+      missed: missed
+    };
+  });
+  return result;
+}
+
+function pushSeoToVPS(payload) {
+  var props = PropertiesService.getScriptProperties();
+  var apiUrl = props.getProperty('VPS_API_URL');
+  var apiKey = props.getProperty('VPS_API_KEY');
+  var url = apiUrl.replace(/\/api\/reports\/push\/?$/, '') + '/api/seo/push';
+
+  var response = UrlFetchApp.fetch(url, {
+    method: 'post',
+    contentType: 'application/json',
+    headers: { 'X-API-Key': apiKey },
+    payload: JSON.stringify(payload),
+    muteHttpExceptions: true
+  });
+  var code = response.getResponseCode();
+  if (code !== 200) {
+    throw new Error('SEO push error: ' + code + ' - ' + response.getContentText());
+  }
+  Logger.log('SEO push OK: ' + payload.pages.length + ' pages');
+}
+
+/**
+ * テスト用: 1社だけSEO分析を実行（先週分）
+ */
+function testSeoSingleCustomer() {
+  var customers = getCustomersFromSheet();
+  if (customers.length === 0) { Logger.log('顧客データがありません'); return; }
+  var customer = customers[0];
+
+  var today = new Date();
+  var dow = today.getDay();
+  var thisMonday = new Date(today);
+  thisMonday.setDate(today.getDate() - (dow === 0 ? 6 : dow - 1));
+  var lastMonday = new Date(thisMonday); lastMonday.setDate(thisMonday.getDate() - 7);
+  var lastSunday = new Date(thisMonday); lastSunday.setDate(thisMonday.getDate() - 1);
+
+  Logger.log('SEOテスト対象: ' + customer.companyName + ' ' + formatDate(lastMonday) + '〜' + formatDate(lastSunday));
+  runSeoAnalysis(customer, formatDate(lastMonday), formatDate(lastSunday));
+  Logger.log('送信完了。VPS側でクロール・採点中（1〜2分後に画面を再読み込み）');
 }
 
 // ===== ユーティリティ =====

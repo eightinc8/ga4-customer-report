@@ -75,9 +75,15 @@ export default async function CustomerReportPage({
         <h2 className="text-xl font-bold text-gray-800 mb-2 print:hidden">
           {customer.company_name}
         </h2>
-        <p className="text-sm text-gray-500 mb-6 print:hidden">
-          GA4 プロパティID: {customer.ga4_property_id}
-        </p>
+        <div className="flex items-center justify-between flex-wrap gap-2 mb-6 print:hidden">
+          <p className="text-sm text-gray-500">GA4 プロパティID: {customer.ga4_property_id}</p>
+          <a
+            href={`/admin/seo/${customer.id}`}
+            className="px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50 text-sm font-medium"
+          >
+            SEOページ分析 →
+          </a>
+        </div>
 
         <FunnelManager userId={customer.id} />
 

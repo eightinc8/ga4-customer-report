@@ -85,6 +85,20 @@ function initSchema(db: Database.Database) {
       step_value TEXT NOT NULL,
       created_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
+
+    CREATE TABLE IF NOT EXISTS seo_analysis (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER NOT NULL REFERENCES users(id),
+      week_start TEXT NOT NULL,
+      week_end TEXT,
+      path TEXT NOT NULL,
+      data TEXT NOT NULL DEFAULT '{}',
+      score INTEGER DEFAULT 0,
+      organic_sessions INTEGER DEFAULT 0,
+      ai_sessions INTEGER DEFAULT 0,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      UNIQUE(user_id, week_start, path)
+    );
   `);
 
   // マイグレーション
