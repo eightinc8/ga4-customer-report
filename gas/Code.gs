@@ -942,6 +942,32 @@ function testSeoSingleCustomer() {
   Logger.log('送信完了。VPS側でクロール・採点中（1〜2分後に画面を再読み込み）');
 }
 
+/**
+ * 手動用: 全顧客（有効のみ）のSEO分析を実行（先週分）
+ * 週次トリガーを待たずに全社分を取得したいときに使う
+ */
+function testSeoAllCustomers() {
+  var customers = getCustomersFromSheet();
+  var today = new Date();
+  var dow = today.getDay();
+  var thisMonday = new Date(today);
+  thisMonday.setDate(today.getDate() - (dow === 0 ? 6 : dow - 1));
+  var lastMonday = new Date(thisMonday); lastMonday.setDate(thisMonday.getDate() - 7);
+  var lastSunday = new Date(thisMonday); lastSunday.setDate(thisMonday.getDate() - 1);
+  var start = formatDate(lastMonday), end = formatDate(lastSunday);
+
+  customers.forEach(function (customer) {
+    if (customer.status !== '有効') return;
+    try {
+      runSeoAnalysis(customer, start, end);
+      Logger.log('SEO OK: ' + customer.companyName);
+    } catch (e) {
+      Logger.log('SEO NG: ' + customer.companyName + ' - ' + e.message);
+    }
+  });
+  Logger.log('全社送信完了。VPS側でクロール・採点中（数分後に画面を再読み込み）');
+}
+
 // ===== ユーティリティ =====
 
 function formatDate(date) {

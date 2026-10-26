@@ -44,6 +44,8 @@ export interface SeoResult extends SeoInput {
   crawlError?: string;
   title: string;
   titleLen: number;
+  titleCore: string; // サイト名などの末尾セグメントを除いた本来のタイトル
+  titleCoreLen: number;
   h1: string;
   description: string;
   descLen: number;
@@ -181,13 +183,14 @@ function buildChecks(r: Omit<SeoResult, "score" | "checks" | "analyzedAt">): Seo
     return checks;
   }
 
+  const tl = r.titleCoreLen || r.titleLen;
   add({
     id: "titleLen",
-    label: "タイトル文字数（28〜40字）",
-    ok: r.titleLen >= 28 && r.titleLen <= 40,
+    label: "タイトル文字数（サイト名除く 28〜40字）",
+    ok: tl >= 28 && tl <= 40,
     weight: 10,
-    detail: `${r.titleLen}字`,
-    advice: r.titleLen < 28 ? "短すぎます。検索意図を含む語を足して28字以上に。" : r.titleLen > 40 ? "長すぎて検索結果で途切れます。40字以内を目安に。" : "",
+    detail: `${tl}字（サイト名込み ${r.titleLen}字）`,
+    advice: tl < 28 ? "短すぎます。検索意図を含む語を足して28字以上に。" : tl > 40 ? "長すぎて検索結果で途切れます。40字以内を目安に。" : "",
   });
 
   if (mainKw) {
@@ -340,6 +343,8 @@ export async function analyzePage(input: SeoInput): Promise<SeoResult> {
     crawlError: error,
     title: "",
     titleLen: 0,
+    titleCore: "",
+    titleCoreLen: 0,
     h1: "",
     description: "",
     descLen: 0,
@@ -360,6 +365,11 @@ export async function analyzePage(input: SeoInput): Promise<SeoResult> {
     base.titleLen = base.title.length;
     const h1m = /<h1[^>]*>([\s\S]*?)<\/h1>/i.exec(html);
     base.h1 = h1m ? stripTags(h1m[1]) : "";
+    // 「記事タイトル - サイト名」のサイト名部分を除いて文字数を評価する
+    const h1t = base.h1.trim();
+    if (h1t && base.title.startsWith(h1t)) base.titleCore = h1t;
+    else base.titleCore = base.title.replace(/\s*[-|｜–—]\s*[^-|｜–—]{1,40}\s*$/, "").trim() || base.title;
+    base.titleCoreLen = base.titleCore.length;
     base.description = getMeta(html, ["description"]) || getMeta(html, ["og:description"]);
     base.descLen = base.description.length;
 
@@ -446,7 +456,7 @@ export async function analyzePages(
           crawlOk: false,
           crawlStatus: 0,
           crawlError: e instanceof Error ? e.message : String(e),
-          title: "", titleLen: 0, h1: "", description: "", descLen: 0, bodyChars: 0, h2Count: 0,
+          title: "", titleLen: 0, titleCore: "", titleCoreLen: 0, h1: "", description: "", descLen: 0, bodyChars: 0, h2Count: 0,
           internalLinks: 0, externalLinks: 0, publishedAt: null, modifiedAt: null, ageDays: null,
           updatedDays: null, staleYear: null, keywords: [], score: 0, checks: [], analyzedAt: new Date().toISOString(),
         });

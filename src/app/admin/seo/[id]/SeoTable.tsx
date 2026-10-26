@@ -184,7 +184,7 @@ export default function SeoTable({ rows }: { rows: SeoRow[] }) {
 
                             <h4 className="text-xs font-bold text-gray-700 mt-4 mb-2">ページ情報</h4>
                             <dl className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-gray-600">
-                              <dt className="text-gray-400">タイトル文字数</dt><dd>{String(d.titleLen ?? "-")}字</dd>
+                              <dt className="text-gray-400">タイトル文字数</dt><dd>{String(d.titleCoreLen ?? d.titleLen ?? "-")}字<span className="text-gray-400">（サイト名込み {String(d.titleLen ?? "-")}字）</span></dd>
                               <dt className="text-gray-400">説明文文字数</dt><dd>{String(d.descLen ?? "-")}字</dd>
                               <dt className="text-gray-400">本文文字数</dt><dd>{Number(d.bodyChars ?? 0).toLocaleString()}字</dd>
                               <dt className="text-gray-400">見出し(h2)</dt><dd>{String(d.h2Count ?? "-")}個</dd>
