@@ -21,7 +21,8 @@ export async function POST(request: NextRequest) {
 
     const weekStart: string = data.weekStart;
     const weekEnd: string = data.weekEnd || null;
-    const pages: SeoInput[] = Array.isArray(data.pages) ? data.pages.slice(0, 60) : [];
+    // 上位50 ＋ サービスページ（CV直結）の強制追加分
+    const pages: SeoInput[] = Array.isArray(data.pages) ? data.pages.slice(0, 120) : [];
     if (!weekStart || pages.length === 0) {
       return NextResponse.json({ error: "weekStart と pages は必須です" }, { status: 400 });
     }

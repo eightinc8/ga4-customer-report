@@ -99,6 +99,16 @@ function initSchema(db: Database.Database) {
       created_at TEXT NOT NULL DEFAULT (datetime('now')),
       UNIQUE(user_id, week_start, path)
     );
+
+    CREATE TABLE IF NOT EXISTS seo_page_groups (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER NOT NULL REFERENCES users(id),
+      group_key TEXT NOT NULL DEFAULT 'service',
+      pattern TEXT NOT NULL,
+      label TEXT,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      UNIQUE(user_id, pattern)
+    );
   `);
 
   // マイグレーション

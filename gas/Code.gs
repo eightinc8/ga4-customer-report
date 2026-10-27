@@ -751,13 +751,50 @@ function isAiSource(source) {
  */
 function runSeoAnalysis(customer, weekStart, weekEnd) {
   var propertyId = customer.propertyId;
+
+  // ページ分類ルール（VPSで登録）。サービス（CV直結）に分類したパスは流入が少なくても必ず対象に含める
+  var groups = getSeoGroupsFromVPS(propertyId);
+  var servicePatterns = groups
+    .filter(function (g) { return g.group === 'service'; })
+    .map(function (g) { return g.pattern; });
+
   var pages = getTopLandingPages(propertyId, weekStart, weekEnd, 50);
+  var have = {};
+  pages.forEach(function (p) { have[normalizeScPath(p.path)] = true; });
+
+  var extraLimit = 60;
+  function addPage(path, organicSessions) {
+    var key = normalizeScPath(path);
+    if (have[key] || extraLimit <= 0) return;
+    have[key] = true;
+    pages.push({ path: key, organicSessions: organicSessions || 0 });
+    extraLimit--;
+  }
+
+  if (servicePatterns.length > 0) {
+    // GA4 に自然検索の着地があるサービス配下ページ
+    getLandingPagesByPrefix(propertyId, weekStart, weekEnd, servicePatterns).forEach(function (p) {
+      addPage(p.path, p.organicSessions);
+    });
+    // 登録したパスそのもの（カテゴリトップ・サービスページ）は流入ゼロでも必ず分析
+    servicePatterns.forEach(function (p) { addPage(p, 0); });
+  }
+
   if (pages.length === 0) {
     Logger.log('SEO: 自然検索の流入ページがありません (' + customer.companyName + ')');
     return;
   }
   var aiMap = getAiSessionsByLanding(propertyId, weekStart, weekEnd);
   var scMap = getSearchConsoleByPage(customer.siteUrl || '', weekStart, weekEnd);
+
+  // Search Console に表示はあるが GA4 の自然流入がゼロのサービスページも追加
+  if (servicePatterns.length > 0) {
+    Object.keys(scMap)
+      .filter(function (key) { return matchesAnyPattern(key, servicePatterns); })
+      .sort(function (a, b) { return (scMap[b].totalImp || 0) - (scMap[a].totalImp || 0); })
+      .forEach(function (key) { addPage(key, 0); });
+    Logger.log('SEO: サービスページ ' + pages.filter(function (p) { return matchesAnyPattern(p.path, servicePatterns); }).length + '件を対象に含めました');
+  }
 
   var payload = {
     propertyId: propertyId,
@@ -774,6 +811,86 @@ function runSeoAnalysis(customer, weekStart, weekEnd) {
     })
   };
   pushSeoToVPS(payload);
+}
+
+/**
+ * VPSからページ分類ルール（サービス/集客）を取得
+ * 返り値: [{ group: 'service'|'content', pattern: '/coating/' }, ...]
+ */
+function getSeoGroupsFromVPS(propertyId) {
+  try {
+    var props = PropertiesService.getScriptProperties();
+    var apiUrl = props.getProperty('VPS_API_URL');
+    var apiKey = props.getProperty('VPS_API_KEY');
+    var url = apiUrl.replace(/\/api\/reports\/push\/?$/, '') + '/api/seo/groups/gas?propertyId=' + encodeURIComponent(propertyId);
+    var res = UrlFetchApp.fetch(url, { headers: { 'X-API-Key': apiKey }, muteHttpExceptions: true });
+    if (res.getResponseCode() !== 200) {
+      Logger.log('getSeoGroupsFromVPS: HTTP ' + res.getResponseCode());
+      return [];
+    }
+    return JSON.parse(res.getContentText()).groups || [];
+  } catch (e) {
+    Logger.log('getSeoGroupsFromVPS error: ' + e.message);
+    return [];
+  }
+}
+
+/** パスがいずれかのパターン（そのページ自身または配下）に一致するか。VPS側 seo-groups.ts と同じ判定 */
+function matchesAnyPattern(path, patterns) {
+  var n = normalizeScPath(path);
+  for (var i = 0; i < patterns.length; i++) {
+    var q = normalizeScPath(patterns[i]);
+    if (q === '/') { if (n === '/') return true; continue; }
+    if (n === q || n.indexOf(q + '/') === 0) return true;
+  }
+  return false;
+}
+
+/**
+ * 指定パターン配下のランディングページ（自然検索）をすべて取得
+ * GA4 の landingPage は末尾スラッシュの有無が揺れるため EXACT と BEGINS_WITH の両方で拾う
+ */
+function getLandingPagesByPrefix(propertyId, startDate, endDate, patterns) {
+  var exprs = [];
+  patterns.forEach(function (p) {
+    var q = normalizeScPath(p);
+    exprs.push({ filter: { fieldName: 'landingPage', stringFilter: { matchType: 'EXACT', value: q } } });
+    if (q !== '/') {
+      exprs.push({ filter: { fieldName: 'landingPage', stringFilter: { matchType: 'EXACT', value: q + '/' } } });
+      exprs.push({ filter: { fieldName: 'landingPage', stringFilter: { matchType: 'BEGINS_WITH', value: q + '/' } } });
+    }
+  });
+  if (exprs.length === 0) return [];
+
+  try {
+    var report = AnalyticsData.Properties.runReport({
+      dateRanges: [{ startDate: startDate, endDate: endDate }],
+      dimensions: [{ name: 'landingPage' }],
+      metrics: [{ name: 'sessions' }],
+      dimensionFilter: {
+        andGroup: {
+          expressions: [
+            { filter: { fieldName: 'sessionDefaultChannelGroup', stringFilter: { matchType: 'EXACT', value: 'Organic Search' } } },
+            { orGroup: { expressions: exprs } }
+          ]
+        }
+      },
+      orderBys: [{ metric: { metricName: 'sessions' }, desc: true }],
+      limit: 100
+    }, 'properties/' + propertyId);
+
+    if (!report.rows) return [];
+    var out = [];
+    report.rows.forEach(function (row) {
+      var path = row.dimensionValues[0].value;
+      if (!path || path === '(not set)') return;
+      out.push({ path: path, organicSessions: parseInt(row.metricValues[0].value) || 0 });
+    });
+    return out;
+  } catch (e) {
+    Logger.log('getLandingPagesByPrefix error: ' + e.message);
+    return [];
+  }
 }
 
 /**
