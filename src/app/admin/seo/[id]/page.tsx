@@ -117,7 +117,7 @@ export default async function SeoAnalysisPage({ params }: { params: Promise<{ id
             <p className="text-xs text-gray-400 mt-2">GASの週次実行（または testSeoSingleCustomer）後に表示されます。</p>
           </div>
         ) : (
-          <SeoTable rows={rows} groupsConfigured={rules.length > 0} />
+          <SeoTable rows={rows} groupsConfigured={rules.length > 0} companyName={customer.company_name} />
         )}
       </main>
     </div>

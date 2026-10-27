@@ -2,6 +2,8 @@
 
 import { useMemo, useState } from "react";
 import { GROUP_META, GROUP_ORDER, GroupKey } from "@/lib/seo-groups";
+import { buildSiteContext, buildTitleAdvice, findDuplicateTitles, TitleAdvice, TitleSource } from "@/lib/seo-title";
+import TitleAdviceBlock, { CopyButton, CurrentTitle, TitleStatusBadge } from "./TitleAdviceBlock";
 
 export interface SeoRow {
   path: string;
@@ -38,6 +40,7 @@ interface Sc {
 
 type SortKey = "organic" | "score" | "imp" | "ai";
 type Filter = GroupKey | "all";
+type View = "list" | "title";
 
 function scoreColor(score: number) {
   if (score >= 80) return "bg-green-100 text-green-700";
@@ -50,11 +53,27 @@ function scOf(r: SeoRow): Sc | null {
   return sc && Array.isArray(sc.queries) && sc.queries.length > 0 ? sc : null;
 }
 
-export default function SeoTable({ rows, groupsConfigured }: { rows: SeoRow[]; groupsConfigured: boolean }) {
+export default function SeoTable({ rows, groupsConfigured, companyName }: { rows: SeoRow[]; groupsConfigured: boolean; companyName: string }) {
   const hasService = rows.some((r) => r.group === "service");
   const [filter, setFilter] = useState<Filter>(groupsConfigured && hasService ? "service" : "all");
   const [sort, setSort] = useState<SortKey>("organic");
+  const [view, setView] = useState<View>("list");
   const [open, setOpen] = useState<Set<string>>(new Set());
+
+  // タイトル改善アドバイス（サイト共通末尾・地域語・重複タイトルは全ページから判定）
+  const advice = useMemo(() => {
+    const analyzedRows = rows.filter((r) => "crawlOk" in r.data);
+    const sources = analyzedRows.map((r) => ({ ...(r.data as unknown as TitleSource), path: r.path }));
+    const ctx = buildSiteContext(sources, companyName);
+    const dups = findDuplicateTitles(sources.map((s) => ({ path: s.path || "", title: s.title })));
+    const m = new Map<string, TitleAdvice>();
+    for (const s of sources) {
+      const t = (s.title || "").replace(/\s+/g, " ").trim();
+      const dupPaths = (dups.get(t) || []).filter((p) => p !== s.path);
+      m.set(s.path || "", buildTitleAdvice(s, ctx, dupPaths));
+    }
+    return m;
+  }, [rows, companyName]);
 
   const visible = useMemo(() => {
     const arr = rows.filter((r) => filter === "all" || r.group === filter);
@@ -72,6 +91,7 @@ export default function SeoTable({ rows, groupsConfigured }: { rows: SeoRow[]; g
   const avg = analyzed.length ? Math.round(analyzed.reduce((s, r) => s + r.score, 0) / analyzed.length) : 0;
   const needFix = analyzed.filter((r) => r.score < 60).length;
   const hasSc = rows.some((r) => scOf(r) !== null);
+  const titleFixCount = visible.filter((r) => advice.get(r.path)?.status === "fix").length;
 
   // 分類ごとの集計
   const groupStats = useMemo(
@@ -215,10 +235,126 @@ export default function SeoTable({ rows, groupsConfigured }: { rows: SeoRow[]; g
             </button>
           ))}
         </div>
+        <div className="flex items-center gap-2 print:hidden">
+          <span className="text-gray-500">見方:</span>
+          {([
+            ["list", "採点一覧"],
+            ["title", `タイトル改善${titleFixCount > 0 ? `（要変更 ${titleFixCount}）` : ""}`],
+          ] as [View, string][]).map(([k, label]) => (
+            <button
+              key={k}
+              onClick={() => setView(k)}
+              className={`px-3 py-1.5 rounded-md border text-xs ${view === k ? "bg-gray-800 text-white border-gray-800" : "bg-white text-gray-700 border-gray-300 hover:bg-gray-50"}`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
       </div>
 
+      {/* タイトル改善ビュー: 現在のタイトル全文と変更例 */}
+      {view === "title" && (
+        <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
+          <table className="w-full text-sm">
+            <thead className="bg-gray-50">
+              <tr>
+                <th className="text-left px-3 py-3 text-gray-500 font-medium w-8">#</th>
+                <th className="text-left px-3 py-3 text-gray-500 font-medium w-[34%]">ページ / 現在のタイトル（全文）</th>
+                <th className="text-left px-3 py-3 text-gray-500 font-medium w-[22%]">主要クエリ（表示・順位）／未使用の語</th>
+                <th className="text-left px-3 py-3 text-gray-500 font-medium">課題と変更例</th>
+                <th className="text-center px-3 py-3 text-gray-500 font-medium w-20">状態</th>
+              </tr>
+            </thead>
+            <tbody>
+              {visible.length === 0 && (
+                <tr>
+                  <td colSpan={5} className="px-4 py-8 text-center text-gray-400 text-sm">この分類に該当するページはまだありません。</td>
+                </tr>
+              )}
+              {visible.map((r, i) => {
+                const a = advice.get(r.path);
+                const url = (r.data.url as string) || "";
+                const meta = GROUP_META[r.group];
+                const sc = scOf(r);
+                return (
+                  <tr key={r.path} className="border-t border-gray-100 align-top">
+                    <td className="px-3 py-3 text-gray-400">{i + 1}</td>
+                    <td className="px-3 py-3">
+                      <p className="text-xs text-gray-500 flex items-center gap-1.5 mb-1">
+                        {groupsConfigured && <span className={`shrink-0 text-[10px] px-1.5 py-0.5 rounded border ${meta.badge}`}>{meta.short}</span>}
+                        {url ? (
+                          <a href={url} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline break-all">{r.path}</a>
+                        ) : (
+                          <span className="break-all">{r.path}</span>
+                        )}
+                        <span className="text-gray-400 whitespace-nowrap">自然{r.organic}{sc?.totalImp ? `・表示${sc.totalImp.toLocaleString()}` : ""}</span>
+                      </p>
+                      {a ? (
+                        <>
+                          <p className="leading-relaxed"><CurrentTitle a={a} /></p>
+                          <p className="text-[11px] text-gray-400 mt-1">
+                            本来 {a.coreLen}字{a.suffix ? ` ＋ 末尾 ${a.suffixLen}字 ＝ 全体 ${a.title.length}字` : `（全体 ${a.title.length}字）`}
+                            {a.h1 && <> ・ h1: {a.h1}</>}
+                          </p>
+                        </>
+                      ) : (
+                        <span className="text-xs text-blue-500">解析中</span>
+                      )}
+                    </td>
+                    <td className="px-3 py-3">
+                      {a && a.queries.length > 0 ? (
+                        <div className="flex flex-wrap gap-1">
+                          {a.queries.map((q) => (
+                            <span key={q.q} className="text-[11px] px-1.5 py-0.5 rounded bg-gray-50 border border-gray-200 text-gray-700">
+                              {q.q} <span className="text-gray-400">{q.imp}・{q.pos.toFixed(0)}位</span>
+                            </span>
+                          ))}
+                          {a.missing.map((t) => (
+                            <span key={t} className="text-[11px] px-1.5 py-0.5 rounded bg-red-50 border border-red-200 text-red-700">未使用: {t}</span>
+                          ))}
+                        </div>
+                      ) : (
+                        <span className="text-[11px] text-gray-400">SCデータなし</span>
+                      )}
+                    </td>
+                    <td className="px-3 py-3">
+                      {a && (
+                        <>
+                          {a.issues.length > 0 && (
+                            <ul className="text-[11px] text-gray-600 list-disc pl-4 space-y-0.5 mb-1.5">
+                              {a.issues.map((x) => <li key={x}>{x}</li>)}
+                            </ul>
+                          )}
+                          {a.examples.length > 0 && (
+                            <ul className="space-y-1">
+                              {a.examples.map((e) => (
+                                <li key={e.title} className="flex items-start gap-1.5 text-xs">
+                                  <span className="shrink-0 text-[10px] px-1 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-100 whitespace-nowrap">{e.label}</span>
+                                  <span className="text-gray-900 break-words">{e.title}</span>
+                                  <span className="shrink-0 text-[10px] text-gray-400">{e.len}字</span>
+                                  <CopyButton text={e.title} />
+                                </li>
+                              ))}
+                            </ul>
+                          )}
+                          {a.status === "ok" && a.examples.length === 0 && <span className="text-[11px] text-green-700">現状のままで問題ありません</span>}
+                        </>
+                      )}
+                    </td>
+                    <td className="px-3 py-3 text-center">{a && <TitleStatusBadge status={a.status} />}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+          <p className="text-[11px] text-gray-400 px-4 py-3 border-t border-gray-100">
+            ※ 「本来のタイトル」はサイト内の他ページと共通の末尾（店名・キャッチコピー）を除いた部分。変更例は主要クエリ・h1・店名から機械的に組んだ案なので、文言は整えてからお使いください。
+          </p>
+        </div>
+      )}
+
       {/* 一覧 */}
-      <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
+      <div className={`bg-white rounded-lg border border-gray-200 overflow-hidden ${view === "title" ? "hidden" : ""}`}>
         <table className="w-full text-sm">
           <thead className="bg-gray-50">
             <tr>
@@ -256,11 +392,11 @@ export default function SeoTable({ rows, groupsConfigured }: { rows: SeoRow[]; g
                     <td className="px-4 py-3 text-gray-400">{i + 1}</td>
                     <td className="px-4 py-3">
                       {url ? (
-                        <a href={url} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} className="text-blue-600 hover:underline block truncate max-w-md">
+                        <a href={url} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} className="text-blue-600 hover:underline block break-words max-w-xl">
                           {title || r.path}
                         </a>
                       ) : (
-                        <p className="text-gray-800 truncate max-w-md">{title || r.path}</p>
+                        <p className="text-gray-800 break-words max-w-xl">{title || r.path}</p>
                       )}
                       <p className="text-xs text-gray-400 truncate max-w-md flex items-center gap-1.5">
                         {groupsConfigured && (
@@ -294,6 +430,11 @@ export default function SeoTable({ rows, groupsConfigured }: { rows: SeoRow[]; g
                   {isOpen && isAnalyzed && (
                     <tr className="bg-gray-50 border-t border-gray-100">
                       <td colSpan={8} className="px-6 py-4">
+                        {advice.get(r.path) && (
+                          <div className="mb-5">
+                            <TitleAdviceBlock a={advice.get(r.path)!} />
+                          </div>
+                        )}
                         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                           {/* チェックリスト */}
                           <div>
