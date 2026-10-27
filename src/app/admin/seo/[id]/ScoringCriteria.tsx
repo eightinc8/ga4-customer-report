@@ -40,6 +40,9 @@ export default function ScoringCriteria() {
           </li>
           <li>Search Console が連携できていないページは、順位・取りこぼしの2項目を判定対象から外します（分母にも入りません）。</li>
           <li>ページが取得できない（404・アクセス制限など）場合は 0点です。</li>
+          <li>
+            毎週の結果は週ごとに保存され、前の週と比べてタイトル・説明文・h1 が変わっていれば「変更履歴」に自動で記録されます。各ページの詳細では順位・表示回数・自然検索の週別推移も見られます（変更した週は縦線で表示）。
+          </li>
           <li>目安: <span className="text-green-700 font-medium">80点以上 良好</span> / <span className="text-yellow-700 font-medium">60〜79 改善余地あり</span> / <span className="text-red-700 font-medium">60点未満 要改善</span></li>
         </ul>
 

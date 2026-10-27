@@ -4,6 +4,8 @@ import { useMemo, useState } from "react";
 import { GROUP_META, GROUP_ORDER, GroupKey } from "@/lib/seo-groups";
 import { buildSiteContext, buildTitleAdvice, findDuplicateTitles, TitleAdvice, TitleSource } from "@/lib/seo-title";
 import TitleAdviceBlock, { CopyButton, CurrentTitle, TitleStatusBadge } from "./TitleAdviceBlock";
+import PageTrend from "./PageTrend";
+import { CHANGE_FIELD_LABEL, ChangeField, weekLabel } from "@/lib/seo-history";
 
 export interface SeoRow {
   path: string;
@@ -53,7 +55,19 @@ function scOf(r: SeoRow): Sc | null {
   return sc && Array.isArray(sc.queries) && sc.queries.length > 0 ? sc : null;
 }
 
-export default function SeoTable({ rows, groupsConfigured, companyName }: { rows: SeoRow[]; groupsConfigured: boolean; companyName: string }) {
+export default function SeoTable({
+  rows,
+  groupsConfigured,
+  companyName,
+  userId,
+  lastChange = {},
+}: {
+  rows: SeoRow[];
+  groupsConfigured: boolean;
+  companyName: string;
+  userId: number;
+  lastChange?: Record<string, { week: string; field: string }>;
+}) {
   const hasService = rows.some((r) => r.group === "service");
   const [filter, setFilter] = useState<Filter>(groupsConfigured && hasService ? "service" : "all");
   const [sort, setSort] = useState<SortKey>("organic");
@@ -296,6 +310,11 @@ export default function SeoTable({ rows, groupsConfigured, companyName }: { rows
                             本来 {a.coreLen}字{a.suffix ? ` ＋ 末尾 ${a.suffixLen}字 ＝ 全体 ${a.title.length}字` : `（全体 ${a.title.length}字）`}
                             {a.h1 && <> ・ h1: {a.h1}</>}
                           </p>
+                          {lastChange[r.path] && (
+                            <p className="text-[11px] text-amber-700 mt-0.5">
+                              最終変更: {weekLabel(lastChange[r.path].week)}（{CHANGE_FIELD_LABEL[lastChange[r.path].field as ChangeField] ?? lastChange[r.path].field}）
+                            </p>
+                          )}
                         </>
                       ) : (
                         <span className="text-xs text-blue-500">解析中</span>
@@ -435,6 +454,9 @@ export default function SeoTable({ rows, groupsConfigured, companyName }: { rows
                             <TitleAdviceBlock a={advice.get(r.path)!} />
                           </div>
                         )}
+                        <div className="mb-5">
+                          <PageTrend userId={userId} path={r.path} />
+                        </div>
                         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                           {/* チェックリスト */}
                           <div>

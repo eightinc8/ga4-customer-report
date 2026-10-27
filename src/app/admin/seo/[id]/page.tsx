@@ -5,7 +5,9 @@ import Header from "@/components/Header";
 import SeoTable, { SeoRow } from "./SeoTable";
 import SeoGroupsManager, { Suggestion } from "./SeoGroupsManager";
 import ScoringCriteria from "./ScoringCriteria";
+import ChangeHistory, { ChangeRow } from "./ChangeHistory";
 import { classifyPath, normalizePath, normalizePattern, GroupRule } from "@/lib/seo-groups";
+import { buildHistories, detectAllChanges, HistoryRow } from "@/lib/seo-history";
 
 interface User {
   id: number;
@@ -83,6 +85,30 @@ export default async function SeoAnalysisPage({ params }: { params: Promise<{ id
   }
   const suggestions = [...dirMap.values()].sort((a, b) => b.pages - a.pages).slice(0, 12);
 
+  // 変更履歴: 全週の軽量データ（JSON全体は読まず json_extract で必要な項目だけ）から
+  // タイトル・説明文・h1 の変更を検出し、前後の順位・表示・クリック・自然検索を比較
+  const historyRows = db
+    .prepare(
+      `SELECT path, week_start, week_end, score, organic_sessions, ai_sessions,
+              json_extract(data, '$.analyzedAt') AS analyzed_at,
+              json_extract(data, '$.crawlOk') AS crawl_ok,
+              json_extract(data, '$.title') AS title,
+              json_extract(data, '$.description') AS description,
+              json_extract(data, '$.h1') AS h1,
+              json_extract(data, '$.sc.avgPos') AS avg_pos,
+              json_extract(data, '$.sc.totalImp') AS total_imp,
+              json_extract(data, '$.sc.totalClicks') AS total_clicks
+       FROM seo_analysis
+       WHERE user_id = ? AND week_start >= (SELECT MIN(week_start) FROM (SELECT DISTINCT week_start FROM seo_analysis WHERE user_id = ? ORDER BY week_start DESC LIMIT 52))
+       ORDER BY path, week_start`
+    )
+    .all(customer.id, customer.id) as HistoryRow[];
+  const histories = buildHistories(historyRows);
+  const changes: ChangeRow[] = detectAllChanges(histories).map((c) => ({ ...c, group: classifyPath(c.path, rules) }));
+  const allWeeks = [...new Set(historyRows.map((r) => r.week_start))].sort();
+  const lastChange: Record<string, { week: string; field: string }> = {};
+  for (const c of changes) if (!lastChange[c.path]) lastChange[c.path] = { week: c.week, field: c.field };
+
   return (
     <div className="min-h-screen bg-gray-50">
       <Header companyName={session.companyName} role={session.role} />
@@ -117,7 +143,11 @@ export default async function SeoAnalysisPage({ params }: { params: Promise<{ id
             <p className="text-xs text-gray-400 mt-2">GASの週次実行（または testSeoSingleCustomer）後に表示されます。</p>
           </div>
         ) : (
-          <SeoTable rows={rows} groupsConfigured={rules.length > 0} companyName={customer.company_name} />
+          <SeoTable rows={rows} groupsConfigured={rules.length > 0} companyName={customer.company_name} userId={customer.id} lastChange={lastChange} />
+        )}
+
+        {rows.length > 0 && (
+          <ChangeHistory changes={changes} weeksAvailable={allWeeks.length} firstWeek={allWeeks[0] ?? null} groupsConfigured={rules.length > 0} />
         )}
       </main>
     </div>
