@@ -9,11 +9,22 @@ const SECRET = new TextEncoder().encode(
 const COOKIE_NAME = "ga4_session";
 const MAX_AGE = 60 * 60 * 8; // 8 hours
 
+// admin: 全操作可 / viewer: 管理画面の閲覧のみ（登録・編集は不可） / customer: 自社レポートのみ
+export type Role = "admin" | "viewer" | "customer";
+
 export interface SessionUser {
   id: number;
   loginId: string;
   companyName: string;
-  role: "admin" | "customer";
+  role: Role;
+}
+
+export function isStaff(role: Role | string | undefined): boolean {
+  return role === "admin" || role === "viewer";
+}
+
+export function canEdit(role: Role | string | undefined): boolean {
+  return role === "admin";
 }
 
 export async function createSession(user: SessionUser): Promise<string> {
@@ -75,7 +86,7 @@ export async function authenticate(
     login_id: string;
     password_hash: string;
     company_name: string;
-    role: "admin" | "customer";
+    role: Role;
     is_active: number;
   } | undefined;
 

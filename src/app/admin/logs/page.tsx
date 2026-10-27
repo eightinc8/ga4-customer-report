@@ -1,4 +1,4 @@
-import { getSession } from "@/lib/auth";
+import { getSession, isStaff } from "@/lib/auth";
 import { getDb } from "@/lib/db";
 import { redirect } from "next/navigation";
 import Header from "@/components/Header";
@@ -16,7 +16,7 @@ interface LoginLog {
 export default async function LoginLogsPage() {
   const session = await getSession();
   if (!session) redirect("/login");
-  if (session.role !== "admin") redirect("/dashboard");
+  if (!isStaff(session.role)) redirect("/dashboard");
 
   const db = getDb();
   const logs = db

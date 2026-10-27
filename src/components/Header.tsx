@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 
 interface HeaderProps {
   companyName: string;
-  role: "admin" | "customer";
+  role: "admin" | "viewer" | "customer";
 }
 
 export default function Header({ companyName, role }: HeaderProps) {
@@ -21,7 +21,7 @@ export default function Header({ companyName, role }: HeaderProps) {
       <div className="max-w-6xl mx-auto flex items-center justify-between">
         <div className="flex items-center gap-4">
           <h1 className="text-lg font-bold text-gray-800">GA4 レポート</h1>
-          {role === "admin" && (
+          {(role === "admin" || role === "viewer") && (
             <nav className="flex gap-2 ml-4">
               <a href="/admin/reports" className="text-sm text-gray-600 hover:text-blue-600 px-3 py-1 rounded hover:bg-gray-50">
                 レポート一覧
@@ -39,7 +39,12 @@ export default function Header({ companyName, role }: HeaderProps) {
           )}
         </div>
         <div className="flex items-center gap-4">
-          <span className="text-sm text-gray-600">{companyName}</span>
+          <span className="text-sm text-gray-600">
+            {companyName}
+            {role === "viewer" && (
+              <span className="ml-2 text-xs px-1.5 py-0.5 rounded bg-gray-100 text-gray-500">閲覧のみ</span>
+            )}
+          </span>
           <button
             onClick={handleLogout}
             className="text-sm text-gray-500 hover:text-red-600 transition-colors"

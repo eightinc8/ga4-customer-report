@@ -1,4 +1,4 @@
-import { getSession } from "@/lib/auth";
+import { getSession, isStaff, canEdit } from "@/lib/auth";
 import { getDb } from "@/lib/db";
 import { redirect } from "next/navigation";
 import Header from "@/components/Header";
@@ -16,7 +16,7 @@ interface User {
 export default async function AdminPage() {
   const session = await getSession();
   if (!session) redirect("/login");
-  if (session.role !== "admin") redirect("/dashboard");
+  if (!isStaff(session.role)) redirect("/dashboard");
 
   const db = getDb();
   const customers = db
@@ -34,7 +34,7 @@ export default async function AdminPage() {
           <h2 className="text-xl font-bold text-gray-800">顧客管理</h2>
         </div>
 
-        <CustomerList initialCustomers={customers} />
+        <CustomerList initialCustomers={customers} readOnly={!canEdit(session.role)} />
       </main>
     </div>
   );

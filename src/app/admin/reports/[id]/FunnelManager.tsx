@@ -10,7 +10,7 @@ interface FunnelStep {
   step_value: string;
 }
 
-export default function FunnelManager({ userId }: { userId: number }) {
+export default function FunnelManager({ userId, readOnly = false }: { userId: number; readOnly?: boolean }) {
   const [steps, setSteps] = useState<FunnelStep[]>([]);
   const [label, setLabel] = useState("");
   const [type, setType] = useState<"page" | "event">("page");
@@ -103,16 +103,21 @@ export default function FunnelManager({ userId }: { userId: number }) {
                     </p>
                     <p className="text-xs text-gray-400 truncate">{s.step_value}</p>
                   </div>
-                  <div className="flex items-center gap-1 shrink-0">
-                    <button onClick={() => move(s.id, "up")} disabled={i === 0} className="text-gray-400 hover:text-gray-700 disabled:opacity-30 px-1">↑</button>
-                    <button onClick={() => move(s.id, "down")} disabled={i === steps.length - 1} className="text-gray-400 hover:text-gray-700 disabled:opacity-30 px-1">↓</button>
-                    <button onClick={() => handleDelete(s.id)} className="text-xs text-red-600 hover:text-red-800 ml-1">削除</button>
-                  </div>
+                  {!readOnly && (
+                    <div className="flex items-center gap-1 shrink-0">
+                      <button onClick={() => move(s.id, "up")} disabled={i === 0} className="text-gray-400 hover:text-gray-700 disabled:opacity-30 px-1">↑</button>
+                      <button onClick={() => move(s.id, "down")} disabled={i === steps.length - 1} className="text-gray-400 hover:text-gray-700 disabled:opacity-30 px-1">↓</button>
+                      <button onClick={() => handleDelete(s.id)} className="text-xs text-red-600 hover:text-red-800 ml-1">削除</button>
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
           )}
 
+          {readOnly ? (
+            <p className="text-xs text-gray-400 border-t border-gray-100 pt-3">閲覧のみの権限のため、段階の追加・変更はできません。</p>
+          ) : (
           <form onSubmit={handleAdd} className="border-t border-gray-100 pt-4">
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-3">
               <div>
@@ -137,6 +142,7 @@ export default function FunnelManager({ userId }: { userId: number }) {
               ※ 入口（例:トップ/記事）から成約（例:予約完了ページ or CVイベント）へ、上から順になるよう並べてください。次回レポート更新時から計測されます。
             </p>
           </form>
+          )}
         </div>
       )}
     </div>

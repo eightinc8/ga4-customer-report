@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getSession } from "@/lib/auth";
+import { getSession, isStaff } from "@/lib/auth";
 import { getDb } from "@/lib/db";
 
 export async function GET() {
@@ -10,7 +10,7 @@ export async function GET() {
 
   const db = getDb();
 
-  if (session.role === "admin") {
+  if (isStaff(session.role)) {
     const reports = db
       .prepare(
         `SELECT r.*, u.company_name, u.login_id

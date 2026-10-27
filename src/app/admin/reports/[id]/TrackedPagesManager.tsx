@@ -8,7 +8,7 @@ interface TrackedPage {
   label: string | null;
 }
 
-export default function TrackedPagesManager({ userId }: { userId: number }) {
+export default function TrackedPagesManager({ userId, readOnly = false }: { userId: number; readOnly?: boolean }) {
   const [pages, setPages] = useState<TrackedPage[]>([]);
   const [path, setPath] = useState("");
   const [label, setLabel] = useState("");
@@ -89,18 +89,23 @@ export default function TrackedPagesManager({ userId }: { userId: number }) {
                     <p className="text-sm text-gray-800 truncate">{p.label || p.path}</p>
                     <p className="text-xs text-gray-400 truncate">{p.path}</p>
                   </div>
-                  <button
-                    onClick={() => handleDelete(p.id)}
-                    className="text-xs text-red-600 hover:text-red-800 ml-3 shrink-0"
-                  >
-                    削除
-                  </button>
+                  {!readOnly && (
+                    <button
+                      onClick={() => handleDelete(p.id)}
+                      className="text-xs text-red-600 hover:text-red-800 ml-3 shrink-0"
+                    >
+                      削除
+                    </button>
+                  )}
                 </div>
               ))}
             </div>
           )}
 
           {/* 追加フォーム */}
+          {readOnly ? (
+            <p className="text-xs text-gray-400 border-t border-gray-100 pt-3">閲覧のみの権限のため、登録ページの追加・削除はできません。</p>
+          ) : (
           <form onSubmit={handleAdd} className="border-t border-gray-100 pt-4">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
               <div>
@@ -135,6 +140,7 @@ export default function TrackedPagesManager({ userId }: { userId: number }) {
               ※ URLを貼り付けてもOK（自動でパスに変換されます）。次回のレポート更新時から計測されます。
             </p>
           </form>
+          )}
         </div>
       )}
     </div>

@@ -1,4 +1,4 @@
-import { getSession } from "@/lib/auth";
+import { getSession, isStaff } from "@/lib/auth";
 import { getDb } from "@/lib/db";
 import { redirect } from "next/navigation";
 import Header from "@/components/Header";
@@ -24,7 +24,7 @@ interface Report {
 export default async function DashboardPage() {
   const session = await getSession();
   if (!session) redirect("/login");
-  if (session.role === "admin") redirect("/admin");
+  if (isStaff(session.role)) redirect("/admin");
 
   const db = getDb();
   const reports = db

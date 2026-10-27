@@ -1,4 +1,4 @@
-import { getSession } from "@/lib/auth";
+import { getSession, isStaff, canEdit } from "@/lib/auth";
 import { getDb } from "@/lib/db";
 import { redirect } from "next/navigation";
 import Header from "@/components/Header";
@@ -46,7 +46,8 @@ export default async function CustomerReportPage({
 }) {
   const session = await getSession();
   if (!session) redirect("/login");
-  if (session.role !== "admin") redirect("/dashboard");
+  if (!isStaff(session.role)) redirect("/dashboard");
+  const readOnly = !canEdit(session.role);
 
   const { id } = await params;
   const db = getDb();
@@ -85,9 +86,9 @@ export default async function CustomerReportPage({
           </a>
         </div>
 
-        <FunnelManager userId={customer.id} />
+        <FunnelManager userId={customer.id} readOnly={readOnly} />
 
-        <TrackedPagesManager userId={customer.id} />
+        <TrackedPagesManager userId={customer.id} readOnly={readOnly} />
 
         <ReportDetail reports={reports} companyName={customer.company_name} />
       </main>

@@ -1,4 +1,4 @@
-import { getSession } from "@/lib/auth";
+import { getSession, isStaff } from "@/lib/auth";
 import { getDb } from "@/lib/db";
 import { redirect } from "next/navigation";
 import Header from "@/components/Header";
@@ -23,7 +23,7 @@ interface DbRow {
 export default async function SeoAnalysisPage({ params }: { params: Promise<{ id: string }> }) {
   const session = await getSession();
   if (!session) redirect("/login");
-  if (session.role !== "admin") redirect("/dashboard");
+  if (!isStaff(session.role)) redirect("/dashboard");
 
   const { id } = await params;
   const db = getDb();

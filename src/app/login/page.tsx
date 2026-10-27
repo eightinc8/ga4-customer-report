@@ -28,7 +28,7 @@ export default function LoginPage() {
         return;
       }
 
-      router.push(data.role === "admin" ? "/admin" : "/dashboard");
+      router.push(data.role === "customer" ? "/dashboard" : "/admin");
       router.refresh();
     } catch {
       setError("通信エラーが発生しました");

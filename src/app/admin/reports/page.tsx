@@ -1,4 +1,4 @@
-import { getSession } from "@/lib/auth";
+import { getSession, isStaff } from "@/lib/auth";
 import { getDb } from "@/lib/db";
 import { redirect } from "next/navigation";
 import Header from "@/components/Header";
@@ -25,6 +25,16 @@ interface ReportRow {
   traffic_sources: string;
 }
 
+interface SeoSummary {
+  user_id: number;
+  week_start: string;
+  pages: number;
+  analyzed: number;
+  avg_score: number | null;
+  low: number;
+  with_sc: number;
+}
+
 function changeRate(current: number, previous: number): string {
   if (previous === 0) return "-";
   const diff = ((current - previous) / previous) * 100;
@@ -32,10 +42,16 @@ function changeRate(current: number, previous: number): string {
   return `${sign}${diff.toFixed(1)}%`;
 }
 
+function scoreColor(score: number): string {
+  if (score >= 80) return "text-green-600";
+  if (score >= 60) return "text-yellow-600";
+  return "text-red-600";
+}
+
 export default async function AdminReportsPage() {
   const session = await getSession();
   if (!session) redirect("/login");
-  if (session.role !== "admin") redirect("/dashboard");
+  if (!isStaff(session.role)) redirect("/dashboard");
 
   const db = getDb();
 
@@ -51,6 +67,22 @@ export default async function AdminReportsPage() {
     )
     .all() as ReportRow[];
 
+  // 各顧客の最新週のSEO分析サマリー
+  const seoRows = db
+    .prepare(
+      `SELECT s.user_id, s.week_start,
+              COUNT(*) AS pages,
+              SUM(CASE WHEN s.score > 0 THEN 1 ELSE 0 END) AS analyzed,
+              ROUND(AVG(CASE WHEN s.score > 0 THEN s.score END)) AS avg_score,
+              SUM(CASE WHEN s.score > 0 AND s.score < 60 THEN 1 ELSE 0 END) AS low,
+              SUM(CASE WHEN json_extract(s.data, '$.sc') IS NOT NULL THEN 1 ELSE 0 END) AS with_sc
+       FROM seo_analysis s
+       WHERE s.week_start = (SELECT MAX(week_start) FROM seo_analysis WHERE user_id = s.user_id)
+       GROUP BY s.user_id`
+    )
+    .all() as SeoSummary[];
+  const seoByUser = new Map(seoRows.map((s) => [s.user_id, s]));
+
   return (
     <div className="min-h-screen bg-gray-50">
       <Header companyName={session.companyName} role={session.role} />
@@ -64,13 +96,33 @@ export default async function AdminReportsPage() {
           </div>
         ) : (
           <div className="space-y-6">
-            {latestReports.map((r) => (
-              <a key={r.login_id} href={`/admin/reports/${r.user_id}`} className="block bg-white rounded-lg border border-gray-200 p-6 hover:border-blue-300 hover:shadow-md transition-all cursor-pointer">
-                <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-lg font-bold text-gray-800">{r.company_name} <span className="text-sm font-normal text-blue-600">→ 詳細</span></h3>
-                  <span className="text-sm text-gray-500">
-                    {r.week_start} 〜 {r.week_end}
-                  </span>
+            {latestReports.map((r) => {
+              const seo = seoByUser.get(r.user_id);
+              return (
+              <div key={r.login_id} className="bg-white rounded-lg border border-gray-200 p-6 hover:border-blue-300 hover:shadow-md transition-all">
+                <div className="flex items-center justify-between flex-wrap gap-3 mb-4">
+                  <a href={`/admin/reports/${r.user_id}`} className="group">
+                    <h3 className="text-lg font-bold text-gray-800 group-hover:text-blue-700">
+                      {r.company_name} <span className="text-sm font-normal text-blue-600">→ 詳細</span>
+                    </h3>
+                  </a>
+                  <div className="flex items-center gap-3">
+                    <span className="text-sm text-gray-500">
+                      {r.week_start} 〜 {r.week_end}
+                    </span>
+                    <a
+                      href={`/admin/reports/${r.user_id}`}
+                      className="text-xs px-3 py-1.5 rounded-md border border-gray-300 text-gray-700 bg-white hover:bg-gray-50 font-medium"
+                    >
+                      週次レポート
+                    </a>
+                    <a
+                      href={`/admin/seo/${r.user_id}`}
+                      className="text-xs px-3 py-1.5 rounded-md bg-blue-600 text-white hover:bg-blue-700 font-medium"
+                    >
+                      SEO分析 →
+                    </a>
+                  </div>
                 </div>
 
                 <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-4">
@@ -155,8 +207,39 @@ export default async function AdminReportsPage() {
                     </div>
                   );
                 })()}
-              </a>
-            ))}
+
+                {/* SEO分析サマリー */}
+                <div className="mt-4 pt-4 border-t border-gray-100 flex items-center justify-between flex-wrap gap-2">
+                  {seo ? (
+                    <div className="flex items-center gap-4 text-xs text-gray-600 flex-wrap">
+                      <span className="text-gray-500">SEOページ分析（{seo.week_start} 週）</span>
+                      <span>対象 <span className="font-bold text-gray-800">{seo.pages}</span> ページ</span>
+                      <span>
+                        平均スコア{" "}
+                        <span className={`font-bold ${seo.avg_score != null ? scoreColor(seo.avg_score) : "text-gray-400"}`}>
+                          {seo.avg_score != null ? `${seo.avg_score}点` : "解析中"}
+                        </span>
+                      </span>
+                      <span>要改善（60点未満） <span className="font-bold text-red-600">{seo.low}</span></span>
+                      <span>
+                        Search Console{" "}
+                        {seo.with_sc > 0 ? (
+                          <span className="font-bold text-green-600">連携あり（{seo.with_sc}ページ）</span>
+                        ) : (
+                          <span className="text-gray-400">未連携</span>
+                        )}
+                      </span>
+                    </div>
+                  ) : (
+                    <span className="text-xs text-gray-400">SEOページ分析: まだデータがありません</span>
+                  )}
+                  <a href={`/admin/seo/${r.user_id}`} className="text-xs text-blue-600 hover:text-blue-800 font-medium">
+                    SEO分析を見る →
+                  </a>
+                </div>
+              </div>
+              );
+            })}
           </div>
         )}
       </main>

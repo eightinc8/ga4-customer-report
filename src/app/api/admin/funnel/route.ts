@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getSession } from "@/lib/auth";
+import { getSession, isStaff } from "@/lib/auth";
 import { getDb } from "@/lib/db";
 
 interface FunnelStep {
@@ -13,7 +13,7 @@ interface FunnelStep {
 // ファネルの段階一覧を取得
 export async function GET(request: NextRequest) {
   const session = await getSession();
-  if (!session || session.role !== "admin") {
+  if (!session || !isStaff(session.role)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
   }
   const userId = request.nextUrl.searchParams.get("userId");

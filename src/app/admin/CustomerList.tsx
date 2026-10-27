@@ -13,8 +13,10 @@ interface Customer {
 
 export default function CustomerList({
   initialCustomers,
+  readOnly = false,
 }: {
   initialCustomers: Customer[];
+  readOnly?: boolean;
 }) {
   const [customers, setCustomers] = useState(initialCustomers);
   const [showForm, setShowForm] = useState(false);
@@ -206,20 +208,24 @@ export default function CustomerList({
                       </span>
                     </td>
                     <td className="px-5 py-3 text-center">
-                      <div className="flex gap-3 justify-center">
-                        <button
-                          onClick={() => startEdit(c)}
-                          className="text-xs text-blue-600 hover:text-blue-800"
-                        >
-                          編集
-                        </button>
-                        <button
-                          onClick={() => toggleActive(c.id, c.is_active)}
-                          className="text-xs text-gray-500 hover:text-red-600"
-                        >
-                          {c.is_active ? "無効化" : "有効化"}
-                        </button>
-                      </div>
+                      {readOnly ? (
+                        <span className="text-xs text-gray-400">閲覧のみ</span>
+                      ) : (
+                        <div className="flex gap-3 justify-center">
+                          <button
+                            onClick={() => startEdit(c)}
+                            className="text-xs text-blue-600 hover:text-blue-800"
+                          >
+                            編集
+                          </button>
+                          <button
+                            onClick={() => toggleActive(c.id, c.is_active)}
+                            className="text-xs text-gray-500 hover:text-red-600"
+                          >
+                            {c.is_active ? "無効化" : "有効化"}
+                          </button>
+                        </div>
+                      )}
                     </td>
                   </>
                 )}
@@ -236,7 +242,7 @@ export default function CustomerList({
         </table>
       </div>
 
-      {!showForm ? (
+      {readOnly ? null : !showForm ? (
         <button
           onClick={() => setShowForm(true)}
           className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 text-sm transition-colors"

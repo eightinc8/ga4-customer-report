@@ -769,7 +769,7 @@ function runSeoAnalysis(customer, weekStart, weekEnd) {
         url: buildPageUrl(customer.siteUrl || '', p.path),
         organicSessions: p.organicSessions,
         aiSessions: aiMap[p.path] || 0,
-        sc: scMap[p.path] || null
+        sc: scMap[normalizeScPath(p.path)] || null
       };
     })
   };
@@ -836,14 +836,72 @@ function getAiSessionsByLanding(propertyId, startDate, endDate) {
  * ※ GAS実行アカウントが各サイトのSearch Consoleに閲覧権限を持っていること
  * 返り値: { '/path': { queries:[...], totalQueries, totalImp, totalClicks, avgPos, missed:[...] } }
  */
+// GA4の landingPage は末尾スラッシュ無し（/column/123）、Search Console は正規URL（/column/123/）で返るため、
+// 突き合わせ用に「クエリ・フラグメント除去＋末尾スラッシュ除去」で正規化する
+function normalizeScPath(p) {
+  var s = String(p || '').replace(/[?#].*$/, '');
+  if (s.length > 1) s = s.replace(/\/+$/, '');
+  return s || '/';
+}
+
+// 実行アカウントが閲覧できる Search Console プロパティ一覧（1実行につき1回だけ取得）
+var SC_SITES_CACHE = null;
+function listSearchConsoleSites(token) {
+  if (SC_SITES_CACHE) return SC_SITES_CACHE;
+  SC_SITES_CACHE = [];
+  try {
+    var res = UrlFetchApp.fetch('https://www.googleapis.com/webmasters/v3/sites', {
+      headers: { Authorization: 'Bearer ' + token },
+      muteHttpExceptions: true
+    });
+    var code = res.getResponseCode();
+    if (code === 200) {
+      SC_SITES_CACHE = (JSON.parse(res.getContentText()).siteEntry || [])
+        .filter(function (s) { return s.permissionLevel !== 'siteUnverifiedUser'; })
+        .map(function (s) { return s.siteUrl; });
+    } else {
+      Logger.log('SearchConsole sites.list: HTTP ' + code + ' ' + res.getContentText().slice(0, 200));
+    }
+  } catch (e) {
+    Logger.log('SearchConsole sites.list error: ' + e.message);
+  }
+  return SC_SITES_CACHE;
+}
+
+// サイトURLに対応する Search Console プロパティ候補（権限のあるものを優先、www有無やドメインプロパティも考慮）
+function searchConsoleCandidates(siteUrl, sites) {
+  var host = String(siteUrl).replace(/^https?:\/\//, '').replace(/\/.*$/, '');
+  var bareHost = host.replace(/^www\./, '');
+  var base = String(siteUrl).replace(/\/+$/, '') + '/';
+
+  function hostOf(s) {
+    if (s.indexOf('sc-domain:') === 0) return s.slice(10);
+    return s.replace(/^https?:\/\//, '').replace(/\/.*$/, '');
+  }
+  function rank(s) {
+    if (s === base) return 0;                         // URLプレフィックス完全一致
+    if (s.indexOf('sc-domain:') === 0) return 1;      // ドメインプロパティ
+    if (hostOf(s) === host) return 2;                 // 同ホスト（http/https違い）
+    return 3;                                         // www有無違い
+  }
+
+  var matched = sites.filter(function (s) { return hostOf(s).replace(/^www\./, '') === bareHost; });
+  matched.sort(function (a, b) { return rank(a) - rank(b); });
+
+  // 一覧が取れなかった場合の保険（従来通りの推測）
+  [base, 'sc-domain:' + bareHost, 'sc-domain:' + host].forEach(function (c) {
+    if (matched.indexOf(c) < 0) matched.push(c);
+  });
+  return matched;
+}
+
 function getSearchConsoleByPage(siteUrl, startDate, endDate) {
   var result = {};
   if (!siteUrl) return result;
 
   var token = ScriptApp.getOAuthToken();
   var host = String(siteUrl).replace(/^https?:\/\//, '').replace(/\/.*$/, '');
-  var base = String(siteUrl).replace(/\/+$/, '') + '/';
-  var candidates = [base, 'sc-domain:' + host];
+  var candidates = searchConsoleCandidates(siteUrl, listSearchConsoleSites(token));
 
   var rows = null;
   for (var c = 0; c < candidates.length && !rows; c++) {
@@ -860,7 +918,13 @@ function getSearchConsoleByPage(siteUrl, startDate, endDate) {
       );
       var code = res.getResponseCode();
       if (code === 200) {
-        rows = JSON.parse(res.getContentText()).rows || [];
+        var got = JSON.parse(res.getContentText()).rows || [];
+        if (got.length > 0) {
+          rows = got;
+          Logger.log('SearchConsole 使用プロパティ: ' + candidates[c] + ' (' + got.length + '行)');
+        } else {
+          Logger.log('SearchConsole ' + candidates[c] + ': データ0件（次の候補へ）');
+        }
       } else {
         Logger.log('SearchConsole ' + candidates[c] + ': HTTP ' + code + ' ' + res.getContentText().slice(0, 200));
       }
@@ -868,13 +932,16 @@ function getSearchConsoleByPage(siteUrl, startDate, endDate) {
       Logger.log('SearchConsole error: ' + e.message);
     }
   }
-  if (!rows) return result;
+  if (!rows) {
+    Logger.log('SearchConsole: ' + host + ' のデータを取得できませんでした（このアカウントで閲覧できるプロパティ: ' + listSearchConsoleSites(token).join(', ') + '）');
+    return result;
+  }
 
   // ページごとに集計
   var byPage = {};
   rows.forEach(function (r) {
     var pageUrl = r.keys[0];
-    var path = String(pageUrl).replace(/^https?:\/\/[^\/]+/, '').replace(/[?#].*$/, '') || '/';
+    var path = normalizeScPath(String(pageUrl).replace(/^https?:\/\/[^\/]+/, ''));
     if (!byPage[path]) byPage[path] = [];
     byPage[path].push({
       q: r.keys[1],
