@@ -259,10 +259,10 @@ export default function SeoTable({ rows, groupsConfigured, companyName }: { rows
             <thead className="bg-gray-50">
               <tr>
                 <th className="text-left px-3 py-3 text-gray-500 font-medium w-8">#</th>
-                <th className="text-left px-3 py-3 text-gray-500 font-medium w-[34%]">ページ / 現在のタイトル（全文）</th>
-                <th className="text-left px-3 py-3 text-gray-500 font-medium w-[22%]">主要クエリ（表示・順位）／未使用の語</th>
+                <th className="text-left px-3 py-3 text-gray-500 font-medium w-[30%]">ページ / 現在のタイトル（全文）</th>
+                <th className="text-left px-3 py-3 text-gray-500 font-medium w-[18%]">主要クエリ（表示・順位）／未使用の語</th>
                 <th className="text-left px-3 py-3 text-gray-500 font-medium">課題と変更例</th>
-                <th className="text-center px-3 py-3 text-gray-500 font-medium w-20">状態</th>
+                <th className="text-center px-3 py-3 text-gray-500 font-medium w-16">状態</th>
               </tr>
             </thead>
             <tbody>
@@ -328,11 +328,11 @@ export default function SeoTable({ rows, groupsConfigured, companyName }: { rows
                           {a.examples.length > 0 && (
                             <ul className="space-y-1">
                               {a.examples.map((e) => (
-                                <li key={e.title} className="flex items-start gap-1.5 text-xs">
-                                  <span className="shrink-0 text-[10px] px-1 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-100 whitespace-nowrap">{e.label}</span>
+                                <li key={e.title} className="text-xs">
+                                  <span className="inline-block align-middle text-[10px] px-1 py-0.5 mr-1.5 rounded bg-blue-50 text-blue-700 border border-blue-100 whitespace-nowrap">{e.label}</span>
                                   <span className="text-gray-900 break-words">{e.title}</span>
-                                  <span className="shrink-0 text-[10px] text-gray-400">{e.len}字</span>
-                                  <CopyButton text={e.title} />
+                                  <span className="ml-1.5 text-[10px] text-gray-400 whitespace-nowrap">{e.len}字</span>
+                                  <span className="ml-1.5 inline-block align-middle"><CopyButton text={e.title} /></span>
                                 </li>
                               ))}
                             </ul>

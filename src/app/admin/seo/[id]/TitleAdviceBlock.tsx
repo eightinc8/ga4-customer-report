@@ -97,11 +97,11 @@ export default function TitleAdviceBlock({ a }: { a: TitleAdvice }) {
           <p className="text-[11px] text-gray-500 mb-1">変更例（主要クエリ・h1・店名から機械的に組んだ案。文言は整えてから使ってください）</p>
           <ul className="space-y-1">
             {a.examples.map((e) => (
-              <li key={e.title} className="flex items-start gap-2 text-sm">
-                <span className="shrink-0 text-[10px] mt-1 px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-100 whitespace-nowrap">{e.label}</span>
+              <li key={e.title} className="text-sm leading-relaxed">
+                <span className="inline-block align-middle text-[10px] px-1.5 py-0.5 mr-2 rounded bg-blue-50 text-blue-700 border border-blue-100 whitespace-nowrap">{e.label}</span>
                 <span className="text-gray-900 break-words">{e.title}</span>
-                <span className="shrink-0 text-[11px] text-gray-400 mt-0.5">{e.len}字</span>
-                <CopyButton text={e.title} />
+                <span className="ml-2 text-[11px] text-gray-400 whitespace-nowrap">{e.len}字</span>
+                <span className="ml-2 inline-block align-middle"><CopyButton text={e.title} /></span>
               </li>
             ))}
           </ul>
