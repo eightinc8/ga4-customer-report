@@ -467,19 +467,19 @@ export function rescoreResult(r: SeoResult): SeoResult {
 export function refineTitleCores(results: SeoResult[]): SeoResult[] {
   const titles = results.filter((r) => r.crawlOk && r.title).map((r) => r.title);
   if (titles.length < 3) return [];
-  const sepRe = /\s*[-|｜–—]\s*/g;
   const changed: SeoResult[] = [];
 
   for (const r of results) {
     if (!r.crawlOk || !r.title) continue;
     let core: string | null = null;
-    sepRe.lastIndex = 0;
-    let m: RegExpExecArray | null;
+    // 区切り位置を先に全部取り出す（同じ正規表現を exec と replace で共用すると lastIndex が戻って無限ループになる）
+    const seps = [...r.title.matchAll(/\s*[-|｜–—]\s*/g)];
     // 左の区切りから順に「他の2ページ以上が同じ末尾を持つか」を調べ、最も長い共通末尾を採用
-    while ((m = sepRe.exec(r.title))) {
-      const suffix = r.title.slice(m.index);
-      const candidate = r.title.slice(0, m.index).trim();
-      if (candidate.length < 2 || suffix.replace(sepRe, "").length < 4) continue;
+    for (const m of seps) {
+      const idx = m.index ?? 0;
+      const suffix = r.title.slice(idx);
+      const candidate = r.title.slice(0, idx).trim();
+      if (candidate.length < 2 || suffix.replace(/\s*[-|｜–—]\s*/g, "").length < 4) continue;
       const shared = titles.filter((t) => t !== r.title && t.endsWith(suffix)).length;
       if (shared >= 2) {
         core = candidate;
