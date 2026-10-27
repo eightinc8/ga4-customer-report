@@ -43,6 +43,7 @@ export interface TitleAdvice {
   queries: TitleQuery[]; // 主要クエリ（表示回数順 上位3）
   missing: string[]; // 主要クエリの語でタイトルに無いもの
   issues: string[];
+  tags: string[]; // 一覧用の短い課題ラベル（短すぎ・主要語なし など）
   examples: TitleExample[];
   status: TitleStatus;
 }
@@ -192,44 +193,48 @@ export function buildTitleAdvice(src: TitleSource, ctx: SiteContext, duplicatePa
   const q1Strong = !!q1 && (q1.pos <= 20 || q1.imp >= 20);
 
   const issues: string[] = [];
+  const tags: string[] = [];
   let status: TitleStatus = "ok";
-  const fix = (msg: string) => {
+  const fix = (msg: string, tag: string) => {
     issues.push(msg);
+    tags.push(tag);
     status = "fix";
   };
-  const improve = (msg: string) => {
+  const improve = (msg: string, tag: string) => {
     issues.push(msg);
+    tags.push(tag);
     if (status === "ok") status = "improve";
   };
   const note = (msg: string) => issues.push(msg); // 状態は変えない補足
 
   const base = { title, core, suffix, coreLen: core.length, suffixLen: suffixBody.length, h1, hasSc, queries, missing };
   if (src.crawlOk === false || !title) {
-    return { ...base, status: "fix", issues: [src.crawlOk === false ? "ページを取得できていません" : "タイトルが取得できません"], examples: [] };
+    const msg = src.crawlOk === false ? "ページを取得できていません" : "タイトルが取得できません";
+    return { ...base, status: "fix", issues: [msg], tags: [src.crawlOk === false ? "取得失敗" : "タイトルなし"], examples: [] };
   }
 
   const coreLen = core.length;
   const impSum = queries.reduce((s, q) => s + (q.imp || 0), 0);
   // 短すぎるタイトルは、検索での表示がある（需要がある）ページでは「要変更」、無ければ「改善余地」
-  if (coreLen < 20) (impSum >= 20 ? fix : improve)(`本来のタイトルが${coreLen}字と短すぎる（28〜40字が目安）`);
-  else if (coreLen < 28) improve(`本来のタイトルが${coreLen}字と短め（28〜40字が目安）`);
-  else if (coreLen > 50) fix(`本来のタイトルが${coreLen}字と長すぎる（検索結果で途切れる）`);
-  else if (coreLen > 40) improve(`本来のタイトルが${coreLen}字と長め（40字以内が目安）`);
+  if (coreLen < 20) (impSum >= 20 ? fix : improve)(`本来のタイトルが${coreLen}字と短すぎる（28〜40字が目安）`, `${coreLen}字と短い`);
+  else if (coreLen < 28) improve(`本来のタイトルが${coreLen}字と短め（28〜40字が目安）`, `${coreLen}字と短め`);
+  else if (coreLen > 50) fix(`本来のタイトルが${coreLen}字と長すぎる（検索結果で途切れる）`, `${coreLen}字と長い`);
+  else if (coreLen > 40) improve(`本来のタイトルが${coreLen}字と長め（40字以内が目安）`, `${coreLen}字と長め`);
 
-  if (suffixBody.length > 20) improve(`サイト共通の末尾が${suffixBody.length}字と長く、全体${title.length}字（検索結果は30字前後で途切れる）`);
+  if (suffixBody.length > 20) improve(`サイト共通の末尾が${suffixBody.length}字と長く、全体${title.length}字（検索結果は30字前後で途切れる）`, "末尾が長い");
 
   if (q1 && q1Missing.length > 0) {
-    if (q1Strong) fix(`主要クエリ「${q1.q}」の語がタイトルに無い: ${q1Missing.join("・")}`);
-    else improve(`主要クエリ「${q1.q}」の語がタイトルに無い: ${q1Missing.join("・")}（${q1.pos.toFixed(0)}位・表示${q1.imp}回と弱いため参考）`);
+    if (q1Strong) fix(`主要クエリ「${q1.q}」の語がタイトルに無い: ${q1Missing.join("・")}`, `「${q1Missing[0]}」なし`);
+    else improve(`主要クエリ「${q1.q}」の語がタイトルに無い: ${q1Missing.join("・")}（${q1.pos.toFixed(0)}位・表示${q1.imp}回と弱いため参考）`, `「${q1Missing[0]}」なし`);
   }
   const otherMissing = missing.filter((t) => !q1Missing.includes(t));
-  if (otherMissing.length > 0) improve(`上位クエリの語も未使用: ${otherMissing.join("・")}`);
+  if (otherMissing.length > 0) improve(`上位クエリの語も未使用: ${otherMissing.join("・")}`, `「${otherMissing[0]}」未使用`);
   if (!hasSc) note("Search Console未連携のため、検索クエリとの照合はできていません");
 
   const h1Mismatch = !!h1 && !has(title, h1) && !has(h1, core);
-  if (h1Mismatch) improve(`h1「${h1}」とタイトルが一致していない（揃えると評価が安定）`);
-  if (src.staleYear) fix(`タイトルに古い年号「${src.staleYear}年」`);
-  if (duplicatePaths.length > 0) fix(`同じタイトルのページが他に${duplicatePaths.length}件（${duplicatePaths.slice(0, 3).join(", ")}${duplicatePaths.length > 3 ? " …" : ""}）`);
+  if (h1Mismatch) improve(`h1「${h1}」とタイトルが一致していない（揃えると評価が安定）`, "h1と不一致");
+  if (src.staleYear) fix(`タイトルに古い年号「${src.staleYear}年」`, "古い年号");
+  if (duplicatePaths.length > 0) fix(`同じタイトルのページが他に${duplicatePaths.length}件（${duplicatePaths.slice(0, 3).join(", ")}${duplicatePaths.length > 3 ? " …" : ""}）`, "重複タイトル");
 
   // ---- 変更例（機械的に組んだ案。文言は人が整える前提） ----
   const brand = brandFromSuffix(suffix, ctx.siteName);
@@ -258,7 +263,7 @@ export function buildTitleAdvice(src: TitleSource, ctx: SiteContext, duplicatePa
   if (suffixBody.length > 20 && tail !== suffix) push("末尾を短く", `${core}${tail}`);
   if (h1Mismatch) push("h1に揃える", has(h1, brand) || SEP_SPLIT.test(h1) ? h1 : `${h1}${tail}`);
 
-  return { ...base, coreLen, issues, examples: examples.slice(0, 3), status };
+  return { ...base, coreLen, issues, tags, examples: examples.slice(0, 3), status };
 }
 
 /** 同じタイトルを持つページ（テンプレート設定漏れなどの検出用）: title → paths */

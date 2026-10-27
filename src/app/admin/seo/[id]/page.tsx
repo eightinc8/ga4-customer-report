@@ -5,7 +5,7 @@ import Header from "@/components/Header";
 import SeoTable, { SeoRow } from "./SeoTable";
 import SeoGroupsManager, { Suggestion } from "./SeoGroupsManager";
 import ScoringCriteria from "./ScoringCriteria";
-import ChangeHistory, { ChangeRow } from "./ChangeHistory";
+import { ChangeRow } from "./ChangeHistory";
 import { classifyPath, normalizePath, normalizePattern, GroupRule } from "@/lib/seo-groups";
 import { buildHistories, detectAllChanges, HistoryRow } from "@/lib/seo-history";
 
@@ -109,33 +109,45 @@ export default async function SeoAnalysisPage({ params }: { params: Promise<{ id
   const lastChange: Record<string, { week: string; field: string }> = {};
   for (const c of changes) if (!lastChange[c.path]) lastChange[c.path] = { week: c.week, field: c.field };
 
+  const hasSc = rows.some((r) => {
+    const sc = r.data.sc as { queries?: unknown[] } | null | undefined;
+    return !!sc && Array.isArray(sc.queries) && sc.queries.length > 0;
+  });
+  const groupsManager = <SeoGroupsManager userId={customer.id} rules={rules} suggestions={suggestions} readOnly={!canEdit(session.role)} />;
+
   return (
     <div className="min-h-screen bg-gray-50">
       <Header companyName={session.companyName} role={session.role} />
       <main className="max-w-7xl mx-auto px-6 py-8">
-        <div className="mb-6 print:hidden">
+        <div className="mb-4 print:hidden">
           <a href={`/admin/reports/${customer.id}`} className="text-sm text-blue-600 hover:text-blue-800">
             ← {customer.company_name} のレポートに戻る
           </a>
         </div>
 
-        <div className="flex items-end justify-between flex-wrap gap-3 mb-6">
+        <div className="flex items-start justify-between flex-wrap gap-3 mb-5">
           <div>
             <h2 className="text-xl font-bold text-gray-800">{customer.company_name} — SEOページ分析</h2>
             <p className="text-sm text-gray-500 mt-1">
-              自然検索の流入が多い上位ページと、CV直結のサービスページを、タイトル・説明文・本文・リンク・鮮度・検索クエリの観点で採点します。
+              お問い合わせに直結するサービスページを中心に、検索での表示・順位・クリックと、タイトルの改善点を確認します。
             </p>
             <ScoringCriteria />
           </div>
           {latest && (
-            <p className="text-sm text-gray-500">
-              分析対象週: <span className="font-medium text-gray-700">{latest.week_start}{weekEnd ? ` 〜 ${weekEnd}` : ""}</span>
-              {weeks.length > 1 && <span className="ml-2 text-xs text-gray-400">（履歴 {weeks.length}週分）</span>}
-            </p>
+            <div className="text-right text-sm">
+              <p className="text-gray-500">
+                対象週 <span className="font-medium text-gray-800">{latest.week_start}{weekEnd ? ` 〜 ${weekEnd}` : ""}</span>
+                {weeks.length > 1 && <span className="ml-2 text-xs text-gray-400">（履歴 {weeks.length}週分）</span>}
+              </p>
+              <p className={`text-xs mt-1 ${hasSc ? "text-green-700" : "text-gray-400"}`}>
+                Search Console {hasSc ? "連携済み" : "未連携（順位・表示回数は取れていません）"}
+              </p>
+            </div>
           )}
         </div>
 
-        <SeoGroupsManager userId={customer.id} rules={rules} suggestions={suggestions} readOnly={!canEdit(session.role)} />
+        {/* 分類が未設定のときだけ、先に設定を促す */}
+        {rows.length > 0 && rules.length === 0 && <div className="mb-5">{groupsManager}</div>}
 
         {rows.length === 0 ? (
           <div className="bg-white rounded-lg border border-gray-200 p-12 text-center">
@@ -143,12 +155,19 @@ export default async function SeoAnalysisPage({ params }: { params: Promise<{ id
             <p className="text-xs text-gray-400 mt-2">GASの週次実行（または testSeoSingleCustomer）後に表示されます。</p>
           </div>
         ) : (
-          <SeoTable rows={rows} groupsConfigured={rules.length > 0} companyName={customer.company_name} userId={customer.id} lastChange={lastChange} />
+          <SeoTable
+            rows={rows}
+            groupsConfigured={rules.length > 0}
+            companyName={customer.company_name}
+            userId={customer.id}
+            lastChange={lastChange}
+            changes={changes}
+            weeksAvailable={allWeeks.length}
+            firstWeek={allWeeks[0] ?? null}
+          />
         )}
 
-        {rows.length > 0 && (
-          <ChangeHistory changes={changes} weeksAvailable={allWeeks.length} firstWeek={allWeeks[0] ?? null} groupsConfigured={rules.length > 0} />
-        )}
+        {rows.length > 0 && rules.length > 0 && <div className="mt-6">{groupsManager}</div>}
       </main>
     </div>
   );

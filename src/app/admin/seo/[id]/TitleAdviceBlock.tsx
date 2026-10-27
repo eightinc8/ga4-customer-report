@@ -43,12 +43,20 @@ export function TitleStatusBadge({ status }: { status: TitleAdvice["status"] }) 
   return <span className={`inline-block text-[11px] font-bold px-2 py-0.5 rounded border ${m.badge}`}>{m.label}</span>;
 }
 
-/** 詳細パネル用: タイトルの現状・主要クエリ・課題・変更例 */
-export default function TitleAdviceBlock({ a }: { a: TitleAdvice }) {
+/** タイトルの現状・主要クエリ・課題・変更例（詳細パネルとタイトル改善モードの両方で使用） */
+export default function TitleAdviceBlock({ a, header }: { a?: TitleAdvice; header?: React.ReactNode }) {
+  if (!a) {
+    return (
+      <div className="bg-white border border-gray-200 rounded-lg p-4">
+        {header && <div className="mb-2">{header}</div>}
+        <p className="text-xs text-blue-500">解析中（再読み込みで更新）</p>
+      </div>
+    );
+  }
   return (
     <div className="bg-white border border-gray-200 rounded-lg p-4">
       <div className="flex items-center justify-between gap-3 mb-2">
-        <h4 className="text-xs font-bold text-gray-700">タイトル</h4>
+        {header ?? <h4 className="text-xs font-bold text-gray-700">タイトル</h4>}
         <TitleStatusBadge status={a.status} />
       </div>
 
