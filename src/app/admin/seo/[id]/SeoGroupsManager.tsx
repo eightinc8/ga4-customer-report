@@ -134,6 +134,7 @@ export default function SeoGroupsManager({
             パス（ディレクトリ）を登録すると、そのページと配下のページが分類されます。例: <code className="bg-gray-100 px-1 rounded">/coating/</code> を「サービス」にすると
             <code className="bg-gray-100 px-1 rounded">/coating/</code> と <code className="bg-gray-100 px-1 rounded">/coating/system-x/</code> の両方がサービス扱い。
             サービスに分類したページは、流入が少なくても次回の分析から必ず対象に含まれます（登録したパス自体も常に分析されます）。
+            トップページ（/）は登録不要で常にサービス扱いです。
           </p>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

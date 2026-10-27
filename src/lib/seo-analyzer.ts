@@ -422,18 +422,75 @@ export async function analyzePage(input: SeoInput): Promise<SeoResult> {
       const seg = base.title.split(/[｜|\-－–—:：]/)[0].trim();
       kws = seg.split(/[\s　]+/).filter((w) => w.length >= 2).slice(0, 3);
     }
-    const titleL = base.title.toLowerCase();
-    const descL = base.description.toLowerCase();
     base.keywords = kws.map((q) => ({
       q,
-      inTitle: titleL.includes(q.toLowerCase()),
-      inDesc: descL.includes(q.toLowerCase()),
-      bodyCount: countOccurrences(bodyText, q),
+      inTitle: kwIncluded(base.title, q),
+      inDesc: kwIncluded(base.description, q),
+      bodyCount: kwCount(bodyText, q),
     }));
   }
 
   const checks = buildChecks(base);
   return { ...base, checks, score: scoreOf(checks), analyzedAt: new Date().toISOString() };
+}
+
+// 検索クエリは「新車 コーティング 香川」のように語を並べた形が多いので、
+// 語順やスペースに関係なく全ての語が含まれていればヒット扱いにする
+function kwTokens(q: string): string[] {
+  return String(q || "").split(/[\s　]+/).filter(Boolean);
+}
+function kwIncluded(text: string, q: string): boolean {
+  const t = text.toLowerCase();
+  const toks = kwTokens(q);
+  return toks.length > 0 && toks.every((tok) => t.includes(tok.toLowerCase()));
+}
+function kwCount(text: string, q: string): number {
+  const toks = kwTokens(q);
+  if (toks.length <= 1) return countOccurrences(text, q);
+  const phrase = countOccurrences(text, q);
+  if (phrase > 0) return phrase;
+  return Math.min(...toks.map((tok) => countOccurrences(text, tok)));
+}
+
+/** チェック・スコアを現在の値から再計算する（titleCore 補正後などに使用） */
+export function rescoreResult(r: SeoResult): SeoResult {
+  const checks = buildChecks(r);
+  return { ...r, checks, score: scoreOf(checks) };
+}
+
+/**
+ * サイト共通のタイトル末尾（「 - 香川で…専門店｜四国の施工実績多数」など）を、
+ * 同じサイトの他ページと共有している末尾部分として検出し、titleCore を補正する。
+ * 1ページだけでは「 - 」と「｜」が混在するサイト名を正しく切れないため、全ページ取得後に実行する。
+ * 返り値: titleCore が変わった結果のみ（再採点済み）
+ */
+export function refineTitleCores(results: SeoResult[]): SeoResult[] {
+  const titles = results.filter((r) => r.crawlOk && r.title).map((r) => r.title);
+  if (titles.length < 3) return [];
+  const sepRe = /\s*[-|｜–—]\s*/g;
+  const changed: SeoResult[] = [];
+
+  for (const r of results) {
+    if (!r.crawlOk || !r.title) continue;
+    let core: string | null = null;
+    sepRe.lastIndex = 0;
+    let m: RegExpExecArray | null;
+    // 左の区切りから順に「他の2ページ以上が同じ末尾を持つか」を調べ、最も長い共通末尾を採用
+    while ((m = sepRe.exec(r.title))) {
+      const suffix = r.title.slice(m.index);
+      const candidate = r.title.slice(0, m.index).trim();
+      if (candidate.length < 2 || suffix.replace(sepRe, "").length < 4) continue;
+      const shared = titles.filter((t) => t !== r.title && t.endsWith(suffix)).length;
+      if (shared >= 2) {
+        core = candidate;
+        break;
+      }
+    }
+    if (core && core !== r.titleCore) {
+      changed.push(rescoreResult({ ...r, titleCore: core, titleCoreLen: core.length }));
+    }
+  }
+  return changed;
 }
 
 // ---------- 複数ページ（同時実行数を制限） ----------

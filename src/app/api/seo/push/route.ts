@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
-import { analyzePages, SeoInput } from "@/lib/seo-analyzer";
+import { analyzePages, refineTitleCores, SeoInput, SeoResult } from "@/lib/seo-analyzer";
 
 // GASから「上位ページ＋自然/AI流入＋Search Consoleデータ」を受け取り、
 // 保存後にバックグラウンドで各ページをクロール・採点する
@@ -51,10 +51,12 @@ export async function POST(request: NextRequest) {
 async function runAnalysis(userId: number, weekStart: string, pages: SeoInput[]) {
   const db = getDb();
   const upd = db.prepare("UPDATE seo_analysis SET data = ?, score = ? WHERE user_id = ? AND week_start = ? AND path = ?");
+  const results: SeoResult[] = [];
   try {
     await analyzePages(
       pages,
       (r) => {
+        results.push(r);
         try {
           upd.run(JSON.stringify(r), r.score, userId, weekStart, r.path);
         } catch (e) {
@@ -63,6 +65,14 @@ async function runAnalysis(userId: number, weekStart: string, pages: SeoInput[])
       },
       3
     );
+    // 全ページ取得後に、サイト共通のタイトル末尾を除いた本来のタイトル文字数で再採点
+    for (const r of refineTitleCores(results)) {
+      try {
+        upd.run(JSON.stringify(r), r.score, userId, weekStart, r.path);
+      } catch (e) {
+        console.error("seo rescore error", e);
+      }
+    }
   } catch (e) {
     console.error("seo analysis error", e);
   }

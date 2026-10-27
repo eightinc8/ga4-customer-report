@@ -68,6 +68,8 @@ export function matchesPattern(path: string, pattern: string): boolean {
 }
 
 export function classifyPath(path: string, rules: GroupRule[]): GroupKey {
+  // トップページは登録不要で常にサービス（CV直結）扱い
+  if (normalizePath(path) === "/") return "service";
   if (rules.some((r) => r.group_key === "service" && matchesPattern(path, r.pattern))) return "service";
   if (rules.some((r) => r.group_key === "content" && matchesPattern(path, r.pattern))) return "content";
   return "other";

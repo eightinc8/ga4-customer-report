@@ -771,6 +771,9 @@ function runSeoAnalysis(customer, weekStart, weekEnd) {
     extraLimit--;
   }
 
+  // トップページは常にサービス扱いなので必ず分析
+  addPage('/', 0);
+
   if (servicePatterns.length > 0) {
     // GA4 に自然検索の着地があるサービス配下ページ
     getLandingPagesByPrefix(propertyId, weekStart, weekEnd, servicePatterns).forEach(function (p) {

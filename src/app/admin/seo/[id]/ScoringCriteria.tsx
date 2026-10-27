@@ -1,6 +1,6 @@
 const CRITERIA: { label: string; rule: string; weight: number; note?: string }[] = [
-  { label: "タイトル文字数", rule: "サイト名（末尾の「｜社名」など）を除いて 28〜40字", weight: 10 },
-  { label: "タイトルに主要キーワード", rule: "主要キーワードがタイトルに含まれる", weight: 10 },
+  { label: "タイトル文字数", rule: "サイト共通の末尾（「 - 香川で…専門店｜四国の施工実績多数」のように他ページと共通の部分）を除いて 28〜40字", weight: 10 },
+  { label: "タイトルに主要キーワード", rule: "主要キーワードの語がすべてタイトルに含まれる（「新車 コーティング 香川」なら3語とも。語順・スペースは問わない）", weight: 10 },
   { label: "ディスクリプション", rule: "meta description が 70〜130字", weight: 10 },
   { label: "説明文に主要キーワード", rule: "主要キーワードが meta description に含まれる", weight: 5 },
   { label: "本文ボリューム", rule: "本文（article → main → body の順で判定）が 2,000字以上", weight: 10 },
@@ -72,7 +72,7 @@ export default function ScoringCriteria() {
 
         <h3 className="text-sm font-bold text-gray-800 mt-5 mb-2">ページ分類の考え方</h3>
         <ul className="list-disc pl-5 space-y-1 text-xs text-gray-600">
-          <li><span className="font-medium text-orange-700">サービス（CV直結）</span>: サービスのカテゴリトップ（例 /coating/）や各サービスページ（例 /coating/system-x/）。お問い合わせに直結するため、タイトル・内容の調整で上位表示と検索流入を増やすことが目的。</li>
+          <li><span className="font-medium text-orange-700">サービス（CV直結）</span>: トップページ（常にこの扱い）、サービスのカテゴリトップ（例 /coating/）、各サービスページ（例 /coating/system-x/）。お問い合わせに直結するため、タイトル・内容の調整で上位表示と検索流入を増やすことが目的。</li>
           <li><span className="font-medium text-sky-700">集客（コラム・事例）</span>: コラム（例 /columnpost/）や施工事例（例 /g-gallery/）。見込み客の入口で、サービスページへ内部リンクで送ることが役割。</li>
           <li><span className="font-medium text-gray-600">その他</span>: 上記以外。</li>
         </ul>
